@@ -565,7 +565,8 @@ function BoundaryGeoJsonLayer({
 
         pathLayer.bindTooltip(tooltipLines.join("<br/>"), {
           sticky: true,
-          direction: "center",
+          direction: "top",
+          offset: L.point(0, -14),
           opacity: 0.95
         });
       }
@@ -980,8 +981,7 @@ export function ListingsMap({
         filters.bedrooms_min ?? "",
         filters.bathrooms_min ?? "",
         filters.rooms_min ?? "",
-        filters.in_view ? "1" : "0",
-        listings.map((item) => item.id).join(",")
+        filters.in_view ? "1" : "0"
       ].join("|"),
     [
       filters.area_max,
@@ -998,8 +998,7 @@ export function ListingsMap({
       filters.property_type,
       filters.region,
       filters.rent_frequency,
-      filters.rooms_min,
-      listings
+      filters.rooms_min
     ]
   );
 

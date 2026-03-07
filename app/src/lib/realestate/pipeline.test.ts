@@ -15,6 +15,7 @@ describe("realestate pipeline", () => {
     const parsed = parseFiltersFromQuery({
       goal: "sale",
       region: "1,2",
+      rent_frequency: "monthly,annually",
       page: "3",
       sort: "price_desc",
       in_view: "1"
@@ -22,12 +23,14 @@ describe("realestate pipeline", () => {
 
     expect(parsed.goal).toBe("sale");
     expect(parsed.region).toEqual(["1", "2"]);
+    expect(parsed.rent_frequency).toEqual([]);
     expect(parsed.page).toBe(3);
     expect(parsed.in_view).toBe(true);
 
     const serialized = serializeFiltersToQuery(parsed);
     expect(serialized.goal).toBeUndefined();
     expect(serialized.region).toBe("1,2");
+    expect(serialized.rent_frequency).toBeUndefined();
     expect(serialized.page).toBe("3");
     expect(serialized.in_view).toBe("1");
   });

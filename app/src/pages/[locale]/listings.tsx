@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Head from "next/head";
 import type { GetStaticPaths, GetStaticProps, InferGetStaticPropsType } from "next";
 import { AdPlaceholder } from "@/components/ads/ad-placeholder";
 import { ExplorerShell } from "@/components/layout/explorer-shell";
 import { StatsRow } from "@/components/layout/stats-row";
 import { Card, CardContent } from "@/components/ui/card";
-import { ListingsAnalyzeView } from "@/features/analyze/listings-analyze-view";
 import { ActiveFilterChips } from "@/features/filters/active-filter-chips";
 import { FilterPanelDesktop, FilterPanelMobile } from "@/features/filters/filter-panel";
 import { useUrlFilters } from "@/features/filters/use-url-filters";
@@ -18,20 +18,28 @@ import { localeStaticPaths, localeStaticProps, type LocalePageProps } from "@/li
 import { getMessages } from "@/lib/messages";
 import {
   EMPTY_ANALYTICS_SNAPSHOT,
-  EMPTY_FILTER_OPTIONS,
+  EMPTY_ANALYZE_SNAPSHOT_DAILY_RESULT,
   EMPTY_LISTINGS_BROWSE_RESULT,
-  fetchFilterOptions,
-  fetchGeoRankings,
+  fetchAnalyzeSnapshotDaily,
   fetchListingsBrowse,
-  fetchListingsStats
+  fetchKpiLive
 } from "@/lib/queries/realestate";
 import { DEFAULT_PAGE_SIZE, getGeoDrillLevel } from "@/lib/realestate/pipeline";
-import type {
-  FilterOptionSet,
-  GeoRankingRow,
-  Listing
-} from "@/lib/realestate/types";
+import { HARDCODED_FILTER_OPTIONS } from "@/lib/realestate/hardcoded-filter-options";
+import type { GeoRankingRow, Listing } from "@/lib/realestate/types";
 import { useLocaleDocument } from "@/lib/use-locale-document";
+
+const ListingsAnalyzeView = dynamic(
+  () => import("@/features/analyze/listings-analyze-view").then((module) => module.ListingsAnalyzeView),
+  {
+    ssr: false,
+    loading: () => (
+      <Card className="border-border/70 bg-card/80">
+        <CardContent className="py-4 text-sm text-muted-foreground">Loading analytics...</CardContent>
+      </Card>
+    )
+  }
+);
 
 export const getStaticPaths: GetStaticPaths = localeStaticPaths;
 
@@ -43,7 +51,6 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
   const messages = getMessages(locale);
   const { mode, setMode, filters, setFilters, resetFilters, hrefQuery } = useUrlFilters(locale);
 
-  const [filterOptions, setFilterOptions] = useState<FilterOptionSet>(EMPTY_FILTER_OPTIONS);
   const [stats, setStats] = useState(EMPTY_ANALYTICS_SNAPSHOT);
   const [browseResult, setBrowseResult] = useState(EMPTY_LISTINGS_BROWSE_RESULT);
   const [rankingRows, setRankingRows] = useState<GeoRankingRow[]>([]);
@@ -58,28 +65,10 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
   const compareIds = useMemo(() => Object.keys(compareById), [compareById]);
   const compareListings = useMemo(() => Object.values(compareById), [compareById]);
   const drillLevel = useMemo(() => getGeoDrillLevel(filters), [filters]);
+  const isAbortError = (error: unknown) => error instanceof Error && error.name === "AbortError";
 
   useEffect(() => {
-    let isCancelled = false;
-
-    void fetchFilterOptions()
-      .then((result) => {
-        if (!isCancelled) {
-          setFilterOptions(result);
-        }
-      })
-      .catch(() => {
-        if (!isCancelled) {
-          setFilterOptions(EMPTY_FILTER_OPTIONS);
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
+    const controller = new AbortController();
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setIsLoading(true);
@@ -87,8 +76,8 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
 
     if (mode === "browse") {
       void Promise.all([
-        fetchListingsStats(filters),
-        fetchListingsBrowse(filters, DEFAULT_PAGE_SIZE)
+        fetchKpiLive(filters, undefined, { signal: controller.signal }),
+        fetchListingsBrowse(filters, DEFAULT_PAGE_SIZE, { signal: controller.signal })
       ])
         .then(([nextStats, nextBrowse]) => {
           if (requestIdRef.current !== requestId) {
@@ -104,6 +93,14 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
             return;
           }
 
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          if (isAbortError(nextError)) {
+            return;
+          }
+
           setError(nextError instanceof Error ? nextError.message : "Failed to load listings");
           setBrowseResult(EMPTY_LISTINGS_BROWSE_RESULT);
         })
@@ -113,23 +110,31 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
           }
         });
 
-      return;
+      return () => {
+        controller.abort();
+      };
     }
 
-    void Promise.all([
-      fetchListingsStats(filters),
-      fetchGeoRankings(filters, drillLevel)
-    ])
-      .then(([nextStats, nextRankings]) => {
+    void fetchAnalyzeSnapshotDaily(filters, { signal: controller.signal })
+      .then((result) => {
         if (requestIdRef.current !== requestId) {
           return;
         }
 
-        setStats(nextStats);
-        setRankingRows(nextRankings);
+        const nextStats = result ?? EMPTY_ANALYZE_SNAPSHOT_DAILY_RESULT;
+        setStats(nextStats.snapshot);
+        setRankingRows(nextStats.rankings[drillLevel] ?? []);
       })
       .catch((nextError) => {
         if (requestIdRef.current !== requestId) {
+          return;
+        }
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        if (isAbortError(nextError)) {
           return;
         }
 
@@ -141,6 +146,10 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
           setIsLoading(false);
         }
       });
+
+    return () => {
+      controller.abort();
+    };
   }, [drillLevel, filters, mode]);
 
   const openListingDetails = (listing: Listing) => {
@@ -189,9 +198,10 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
             locale={locale}
             messages={messages}
             filters={filters}
-            options={filterOptions}
+            options={HARDCODED_FILTER_OPTIONS}
             onPatch={setFilters}
             onReset={resetFilters}
+            disableNumericFilters={mode === "analyze"}
           />
         }
         filterPanelMobile={
@@ -199,9 +209,10 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
             locale={locale}
             messages={messages}
             filters={filters}
-            options={filterOptions}
+            options={HARDCODED_FILTER_OPTIONS}
             onPatch={setFilters}
             onReset={resetFilters}
+            disableNumericFilters={mode === "analyze"}
           />
         }
         activeFilterChips={

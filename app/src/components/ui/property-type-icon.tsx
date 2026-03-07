@@ -18,7 +18,11 @@ type Props = {
 
 export function PropertyTypeIcon({ type, className }: Props) {
   const Icon =
-    type === "apartment" || type === "building" || type === "floor" || type === "studio"
+    type === "apartment" ||
+    type === "building" ||
+    type === "floor" ||
+    type === "studio" ||
+    type === "room"
       ? Building2
       : type === "villa" || type === "duplex" || type === "townhouse" || type === "chalet" || type === "compound"
         ? House

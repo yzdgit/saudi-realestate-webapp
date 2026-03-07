@@ -21,6 +21,7 @@ export type PropertyType =
   | "compound"
   | "floor"
   | "studio"
+  | "room"
   | "other";
 
 export type ListingType = "residential" | "commercial";

@@ -36,17 +36,6 @@ export function ActiveFilterChips({ locale, messages, filters, onPatch, onReset 
     });
   }
 
-  for (const frequency of filters.rent_frequency) {
-    chips.push({
-      id: `rent-frequency-${frequency}`,
-      label: `${messages.listings.rent_frequency}: ${messages.rent_frequency[frequency]}`,
-      onRemove: () =>
-        onPatch({
-          rent_frequency: filters.rent_frequency.filter((item) => item !== frequency)
-        })
-    });
-  }
-
   for (const region of filters.region) {
     chips.push({
       id: `region-${region}`,

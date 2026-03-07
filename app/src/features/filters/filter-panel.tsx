@@ -25,7 +25,6 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 
@@ -41,6 +40,7 @@ type FilterPanelProps = {
   onPatch: (patch: Partial<ListingFilters>, options?: PatchOptions) => void;
   onReset: () => void;
   showInViewToggle?: boolean;
+  disableNumericFilters?: boolean;
   compact?: boolean;
 };
 
@@ -197,6 +197,7 @@ function FilterPanelBody({
   onPatch,
   onReset,
   showInViewToggle = false,
+  disableNumericFilters = false,
   compact = false
 }: FilterPanelProps) {
   const normalizedFilters = useMemo(() => normalizeFilters(filters), [filters]);
@@ -282,9 +283,7 @@ function FilterPanelBody({
           <Label>{messages.filters.goal}</Label>
           <IconRadioToggle
             value={draftFilters.goal}
-            onChange={(value) =>
-              patchDraft(value === "rent" ? { goal: value } : { goal: value, rent_frequency: [] })
-            }
+            onChange={(value) => patchDraft({ goal: value, rent_frequency: [] })}
             options={[
               { value: "sale", label: messages.goal.sale, icon: Landmark },
               { value: "rent", label: messages.goal.rent, icon: KeyRound }
@@ -302,145 +301,6 @@ function FilterPanelBody({
               { value: "commercial", label: messages.listing_type.commercial, icon: Building2 }
             ]}
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label>{messages.filters.sort}</Label>
-          <Select
-            value={draftFilters.sort}
-            onValueChange={(value) => patchDraft({ sort: value as ListingSort })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sortOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {messages.sorting[option.key]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Separator />
-
-        {draftFilters.goal === "rent" ? (
-          <div className="space-y-2">
-            <Label>{messages.listings.rent_frequency}</Label>
-            <div className="grid gap-2">
-              {options.rent_frequency.map((frequency) => (
-                <label key={frequency} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Checkbox
-                    checked={draftFilters.rent_frequency.includes(frequency)}
-                    onCheckedChange={() =>
-                      patchDraft({
-                        rent_frequency: toggleString(
-                          draftFilters.rent_frequency,
-                          frequency
-                        ) as ListingFilters["rent_frequency"]
-                      })
-                    }
-                  />
-                  <span>{messages.rent_frequency[frequency]}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="space-y-2">
-          <Label>{messages.filters.property_type}</Label>
-          <div className="grid max-h-40 gap-2 overflow-y-auto pr-1">
-            {options.property_type.map((type) => (
-              <label key={type} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={draftFilters.property_type.includes(type)}
-                  onCheckedChange={() =>
-                    patchDraft({
-                      property_type: toggleString(
-                        draftFilters.property_type,
-                        type
-                      ) as ListingFilters["property_type"]
-                    })
-                  }
-                />
-                <span>{messages.property_type[type]}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="price_min">{messages.filters.price_min}</Label>
-            <Input
-              id="price_min"
-              inputMode="numeric"
-              value={draftFilters.price_min ?? ""}
-              onChange={(event) => patchDraft({ price_min: parseNumber(event.target.value) })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="price_max">{messages.filters.price_max}</Label>
-            <Input
-              id="price_max"
-              inputMode="numeric"
-              value={draftFilters.price_max ?? ""}
-              onChange={(event) => patchDraft({ price_max: parseNumber(event.target.value) })}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="area_min">{messages.filters.area_min}</Label>
-            <Input
-              id="area_min"
-              inputMode="numeric"
-              value={draftFilters.area_min ?? ""}
-              onChange={(event) => patchDraft({ area_min: parseNumber(event.target.value) })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="area_max">{messages.filters.area_max}</Label>
-            <Input
-              id="area_max"
-              inputMode="numeric"
-              value={draftFilters.area_max ?? ""}
-              onChange={(event) => patchDraft({ area_max: parseNumber(event.target.value) })}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="bedrooms_min">{messages.filters.bedrooms_min}</Label>
-            <Input
-              id="bedrooms_min"
-              inputMode="numeric"
-              value={draftFilters.bedrooms_min ?? ""}
-              onChange={(event) => patchDraft({ bedrooms_min: parseNumber(event.target.value) })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="bathrooms_min">{messages.filters.bathrooms_min}</Label>
-            <Input
-              id="bathrooms_min"
-              inputMode="numeric"
-              value={draftFilters.bathrooms_min ?? ""}
-              onChange={(event) => patchDraft({ bathrooms_min: parseNumber(event.target.value) })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rooms_min">{messages.filters.rooms_min}</Label>
-            <Input
-              id="rooms_min"
-              inputMode="numeric"
-              value={draftFilters.rooms_min ?? ""}
-              onChange={(event) => patchDraft({ rooms_min: parseNumber(event.target.value) })}
-            />
-          </div>
         </div>
 
         <div className="space-y-2">
@@ -493,6 +353,126 @@ function FilterPanelBody({
             </div>
           </div>
         ) : null}
+
+        <div className="space-y-2">
+          <Label>{messages.filters.property_type}</Label>
+          <div className="grid max-h-40 gap-2 overflow-y-auto pr-1">
+            {options.property_type.map((type) => (
+              <label key={type} className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Checkbox
+                  checked={draftFilters.property_type.includes(type)}
+                  onCheckedChange={() =>
+                    patchDraft({
+                      property_type: toggleString(
+                        draftFilters.property_type,
+                        type
+                      ) as ListingFilters["property_type"]
+                    })
+                  }
+                />
+                <span>{messages.property_type[type]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="price_min">{messages.filters.price_min}</Label>
+            <Input
+              id="price_min"
+              inputMode="numeric"
+              value={draftFilters.price_min ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ price_min: parseNumber(event.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="price_max">{messages.filters.price_max}</Label>
+            <Input
+              id="price_max"
+              inputMode="numeric"
+              value={draftFilters.price_max ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ price_max: parseNumber(event.target.value) })}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="area_min">{messages.filters.area_min}</Label>
+            <Input
+              id="area_min"
+              inputMode="numeric"
+              value={draftFilters.area_min ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ area_min: parseNumber(event.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="area_max">{messages.filters.area_max}</Label>
+            <Input
+              id="area_max"
+              inputMode="numeric"
+              value={draftFilters.area_max ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ area_max: parseNumber(event.target.value) })}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="bedrooms_min">{messages.filters.bedrooms_min}</Label>
+            <Input
+              id="bedrooms_min"
+              inputMode="numeric"
+              value={draftFilters.bedrooms_min ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ bedrooms_min: parseNumber(event.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bathrooms_min">{messages.filters.bathrooms_min}</Label>
+            <Input
+              id="bathrooms_min"
+              inputMode="numeric"
+              value={draftFilters.bathrooms_min ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ bathrooms_min: parseNumber(event.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rooms_min">{messages.filters.rooms_min}</Label>
+            <Input
+              id="rooms_min"
+              inputMode="numeric"
+              value={draftFilters.rooms_min ?? ""}
+              disabled={disableNumericFilters}
+              onChange={(event) => patchDraft({ rooms_min: parseNumber(event.target.value) })}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>{messages.filters.sort}</Label>
+          <Select
+            value={draftFilters.sort}
+            onValueChange={(value) => patchDraft({ sort: value as ListingSort })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {messages.sorting[option.key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {showInViewToggle ? (
           <div className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2">

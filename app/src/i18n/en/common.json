@@ -84,6 +84,7 @@
     "compound": "Compound",
     "floor": "Floor",
     "studio": "Studio",
+    "room": "Room",
     "other": "Other"
   },
   "rent_frequency": {

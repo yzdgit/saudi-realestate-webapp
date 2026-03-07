@@ -18,6 +18,7 @@ type ExplorerShellProps = {
   activePage: ExplorerPage;
   mode: ExplorerMode;
   onModeChange: (mode: ExplorerMode) => void;
+  showModeToggle?: boolean;
   title: string;
   description: string;
   filterPanelDesktop: React.ReactNode;
@@ -90,6 +91,7 @@ export function ExplorerShell({
   activePage,
   mode,
   onModeChange,
+  showModeToggle = true,
   title,
   description,
   filterPanelDesktop,
@@ -185,13 +187,15 @@ export function ExplorerShell({
                 }}
               />
 
-              <IconRadioGroup
-                value={viewLevelValue}
-                options={viewLevelOptions}
-                onChange={(value) => {
-                  onModeChange(value as ExplorerMode);
-                }}
-              />
+              {showModeToggle ? (
+                <IconRadioGroup
+                  value={viewLevelValue}
+                  options={viewLevelOptions}
+                  onChange={(value) => {
+                    onModeChange(value as ExplorerMode);
+                  }}
+                />
+              ) : null}
             </div>
           </div>
 

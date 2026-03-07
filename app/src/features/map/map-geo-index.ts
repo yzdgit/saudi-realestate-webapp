@@ -44,6 +44,11 @@ function getNameEn(feature: GeoFeature): string {
   return typeof value === "string" ? value : "";
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  const normalized = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(normalized) ? normalized : undefined;
+}
+
 type BoundsAccumulator = {
   north: number;
   south: number;
@@ -137,6 +142,39 @@ function centerFromBounds(bounds: MapBounds): [number, number] {
   return [(bounds.north + bounds.south) / 2, (bounds.east + bounds.west) / 2];
 }
 
+function boundsFromProperties(feature: GeoFeature): MapBounds | undefined {
+  const north = toFiniteNumber(feature.properties.bounds_north);
+  const south = toFiniteNumber(feature.properties.bounds_south);
+  const east = toFiniteNumber(feature.properties.bounds_east);
+  const west = toFiniteNumber(feature.properties.bounds_west);
+
+  if (
+    typeof north !== "number" ||
+    typeof south !== "number" ||
+    typeof east !== "number" ||
+    typeof west !== "number"
+  ) {
+    return undefined;
+  }
+
+  if (north < south || east < west) {
+    return undefined;
+  }
+
+  return { north, south, east, west };
+}
+
+function centerFromProperties(feature: GeoFeature): [number, number] | undefined {
+  const latitude = toFiniteNumber(feature.properties.center_lat);
+  const longitude = toFiniteNumber(feature.properties.center_lng);
+
+  if (typeof latitude !== "number" || typeof longitude !== "number") {
+    return undefined;
+  }
+
+  return [latitude, longitude];
+}
+
 export function normalizeBoundaryCollection(data: GeoFeatureCollection): GeoFeatureCollection {
   const normalized = data.features
     .map((feature) => {
@@ -179,6 +217,7 @@ export function buildBoundaryIndex(level: MapLevel, collection: GeoFeatureCollec
     }
 
     const bounds =
+      boundsFromProperties(feature) ??
       boundsFromGeometry(feature.geometry) ?? {
         north: 24.7141,
         south: 24.7131,
@@ -186,7 +225,7 @@ export function buildBoundaryIndex(level: MapLevel, collection: GeoFeatureCollec
         west: 46.6748
       };
 
-    const center = centerFromBounds(bounds);
+    const center = centerFromProperties(feature) ?? centerFromBounds(bounds);
 
     const meta: BoundaryFeatureMeta = {
       code,

@@ -1,4 +1,4 @@
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { buildCacheKey, runCachedQuery } from "@/lib/queries/cache";
 import type {
   AnalyticsSnapshot,
   FilterOptionSet,
@@ -7,10 +7,17 @@ import type {
   Listing,
   ListingFilters,
   MapAreaStat,
-  MapBounds
+  MapBounds,
+  MapLevel
 } from "@/lib/realestate/types";
+import { getSupabaseBrowserClient, resetSupabaseBrowserClient } from "@/lib/supabase";
 
 type AnyRecord = Record<string, unknown>;
+
+type FetchOptions = {
+  signal?: AbortSignal;
+  ttlMs?: number;
+};
 
 export type ListingsBrowseResult = {
   rows: Listing[];
@@ -25,6 +32,15 @@ export type MapPointsResult = {
   returnedCount: number;
   totalInBounds: number;
 };
+
+export type MapAreaStatsBundle = Record<MapLevel, MapAreaStat[]>;
+
+export type AnalyzeSnapshotDailyResult = {
+  snapshot: AnalyticsSnapshot;
+  rankings: Record<GeoRankingLevel, GeoRankingRow[]>;
+};
+
+const DAY_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const EMPTY_FILTER_OPTIONS: FilterOptionSet = {
   goal: [],
@@ -76,6 +92,21 @@ export const EMPTY_MAP_POINTS_RESULT: MapPointsResult = {
   totalInBounds: 0
 };
 
+export const EMPTY_MAP_AREA_STATS_BUNDLE: MapAreaStatsBundle = {
+  region: [],
+  city: [],
+  district: []
+};
+
+export const EMPTY_ANALYZE_SNAPSHOT_DAILY_RESULT: AnalyzeSnapshotDailyResult = {
+  snapshot: EMPTY_ANALYTICS_SNAPSHOT,
+  rankings: {
+    region: [],
+    city: [],
+    district: []
+  }
+};
+
 const toNumber = (value: unknown, fallback = 0): number => {
   const normalized = typeof value === "number" ? value : Number(value);
   return Number.isFinite(normalized) ? normalized : fallback;
@@ -116,7 +147,20 @@ const toRecordArray = (value: unknown): AnyRecord[] => {
     .filter((item) => Object.keys(item).length > 0);
 };
 
-const toFilterPayload = (filters: ListingFilters): AnyRecord => {
+export function stripNumericFilterValues(filters: ListingFilters): ListingFilters {
+  return {
+    ...filters,
+    price_min: undefined,
+    price_max: undefined,
+    area_min: undefined,
+    area_max: undefined,
+    bedrooms_min: undefined,
+    bathrooms_min: undefined,
+    rooms_min: undefined
+  };
+}
+
+const toFilterPayload = (filters: ListingFilters, includeNumeric = true): AnyRecord => {
   const payload: AnyRecord = {
     goal: filters.goal,
     listing_type: filters.listing_type,
@@ -127,6 +171,10 @@ const toFilterPayload = (filters: ListingFilters): AnyRecord => {
     district: filters.district,
     in_view: filters.in_view
   };
+
+  if (!includeNumeric) {
+    return payload;
+  }
 
   if (typeof filters.price_min === "number") {
     payload.price_min = filters.price_min;
@@ -246,85 +294,10 @@ const toSnapshot = (payload: unknown): AnalyticsSnapshot => {
   };
 };
 
-const handleRpcError = (error: { message?: string } | null): never | void => {
-  if (!error) {
-    return;
-  }
-
-  throw new Error(error.message ?? "Supabase RPC request failed");
-};
-
-export async function fetchFilterOptions(): Promise<FilterOptionSet> {
-  const supabase = getSupabaseBrowserClient() as any;
-  const { data, error } = await supabase.rpc("rpc_filter_options");
-  handleRpcError(error);
-
-  const payload = toRecord(data);
-
-  return {
-    goal: toStringArray(payload.goal) as FilterOptionSet["goal"],
-    rent_frequency: toStringArray(payload.rent_frequency) as FilterOptionSet["rent_frequency"],
-    property_type: toStringArray(payload.property_type) as FilterOptionSet["property_type"],
-    listing_type: toStringArray(payload.listing_type) as FilterOptionSet["listing_type"],
-    region: toStringArray(payload.region),
-    city: toStringArray(payload.city),
-    district: toStringArray(payload.district)
-  };
-}
-
-export async function fetchListingsBrowse(
-  filters: ListingFilters,
-  pageSize: number
-): Promise<ListingsBrowseResult> {
-  const supabase = getSupabaseBrowserClient() as any;
-  const { data, error } = await supabase.rpc("rpc_listings_browse", {
-    p_filters: toFilterPayload(filters),
-    p_sort: filters.sort,
-    p_page: filters.page,
-    p_page_size: pageSize
-  });
-  handleRpcError(error);
-
-  const payload = toRecord(data);
-  const rows = toRecordArray(payload.rows).map(toListing);
-
-  return {
-    rows,
-    totalItems: toNumber(payload.total_items),
-    page: Math.max(1, toNumber(payload.page, 1)),
-    pageSize: Math.max(1, toNumber(payload.page_size, pageSize)),
-    totalPages: Math.max(1, toNumber(payload.total_pages, 1))
-  };
-}
-
-export async function fetchListingsStats(
-  filters: ListingFilters,
-  bounds?: MapBounds
-): Promise<AnalyticsSnapshot> {
-  const supabase = getSupabaseBrowserClient() as any;
-  const { data, error } = await supabase.rpc("rpc_listings_stats", {
-    p_filters: toFilterPayload(filters),
-    p_bounds: toBoundsPayload(bounds)
-  });
-  handleRpcError(error);
-
-  return toSnapshot(data);
-}
-
-export async function fetchGeoRankings(
-  filters: ListingFilters,
-  level: GeoRankingLevel
-): Promise<GeoRankingRow[]> {
-  const supabase = getSupabaseBrowserClient() as any;
-  const { data, error } = await supabase.rpc("rpc_geo_rankings", {
-    p_filters: toFilterPayload(filters),
-    p_level: level
-  });
-  handleRpcError(error);
-
-  return toRecordArray(data).map((item) => ({
+const toGeoRankingRows = (value: unknown, fallbackLevel: GeoRankingLevel): GeoRankingRow[] => {
+  return toRecordArray(value).map((item) => ({
     code: String(item.code ?? ""),
-    level: String(item.level ?? level) as GeoRankingLevel,
+    level: String(item.level ?? fallbackLevel) as GeoRankingLevel,
     count: toNumber(item.count),
     meanPrice: toNumber(item.meanPrice),
     medianPrice: toNumber(item.medianPrice),
@@ -333,46 +306,10 @@ export async function fetchGeoRankings(
     rentShare: toNumber(item.rentShare),
     saleShare: toNumber(item.saleShare)
   }));
-}
+};
 
-export async function fetchMapPoints(
-  filters: ListingFilters,
-  bounds: MapBounds | undefined,
-  limit = 500
-): Promise<MapPointsResult> {
-  const supabase = getSupabaseBrowserClient() as any;
-  const { data, error } = await supabase.rpc("rpc_map_points", {
-    p_filters: toFilterPayload(filters),
-    p_bounds: toBoundsPayload(bounds),
-    p_limit: limit
-  });
-  handleRpcError(error);
-
-  const payload = toRecord(data);
-
-  return {
-    rows: toRecordArray(payload.rows).map(toListing),
-    returnedCount: toNumber(payload.returned_count),
-    totalInBounds: toNumber(payload.total_in_bounds)
-  };
-}
-
-export async function fetchMapAreaStats(
-  filters: ListingFilters,
-  level: GeoRankingLevel,
-  regionCode?: string,
-  cityCode?: string
-): Promise<MapAreaStat[]> {
-  const supabase = getSupabaseBrowserClient() as any;
-  const { data, error } = await supabase.rpc("rpc_map_area_stats", {
-    p_filters: toFilterPayload(filters),
-    p_level: level,
-    p_region_code: regionCode ?? null,
-    p_city_code: cityCode ?? null
-  });
-  handleRpcError(error);
-
-  return toRecordArray(data).map((item) => ({
+const toMapAreaStats = (value: unknown, level: MapLevel): MapAreaStat[] => {
+  return toRecordArray(value).map((item) => ({
     level: String(item.level ?? level) as MapAreaStat["level"],
     code: String(item.code ?? ""),
     totalListings: toNumber(item.totalListings),
@@ -383,6 +320,305 @@ export async function fetchMapAreaStats(
     rentShare: toNumber(item.rentShare),
     saleShare: toNumber(item.saleShare)
   }));
+};
+
+const handleRpcError = (error: { message?: string } | null): never | void => {
+  if (!error) {
+    return;
+  }
+
+  throw new Error(error.message ?? "Supabase RPC request failed");
+};
+
+const isMissingApiKeyError = (error: { message?: string } | null | undefined): boolean => {
+  const message = error?.message ?? "";
+  return message.includes("No API key found in request");
+};
+
+const runRpcOnce = async (
+  fn: string,
+  args: AnyRecord | undefined,
+  signal?: AbortSignal
+): Promise<{ data: unknown; error: { message?: string } | null }> => {
+  const supabase = getSupabaseBrowserClient() as any;
+  let request = typeof args === "undefined" ? supabase.rpc(fn) : supabase.rpc(fn, args);
+
+  if (signal && request && typeof request.abortSignal === "function") {
+    request = request.abortSignal(signal);
+  }
+
+  const { data, error } = await request;
+  return { data, error };
+};
+
+const rpc = async (
+  fn: string,
+  args: AnyRecord | undefined,
+  signal?: AbortSignal
+): Promise<unknown> => {
+  const firstAttempt = await runRpcOnce(fn, args, signal);
+
+  if (isMissingApiKeyError(firstAttempt.error)) {
+    resetSupabaseBrowserClient();
+    const retryAttempt = await runRpcOnce(fn, args, signal);
+    handleRpcError(retryAttempt.error);
+    return retryAttempt.data;
+  }
+
+  const { data, error } = firstAttempt;
+  handleRpcError(error);
+  return data;
+};
+
+export async function fetchFilterOptions(options: FetchOptions = {}): Promise<FilterOptionSet> {
+  return runCachedQuery({
+    key: buildCacheKey("rpc_filter_options"),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc("rpc_filter_options", undefined, signal);
+      const payload = toRecord(data);
+
+      return {
+        goal: toStringArray(payload.goal) as FilterOptionSet["goal"],
+        rent_frequency: toStringArray(payload.rent_frequency) as FilterOptionSet["rent_frequency"],
+        property_type: toStringArray(payload.property_type) as FilterOptionSet["property_type"],
+        listing_type: toStringArray(payload.listing_type) as FilterOptionSet["listing_type"],
+        region: toStringArray(payload.region),
+        city: toStringArray(payload.city),
+        district: toStringArray(payload.district)
+      };
+    }
+  });
+}
+
+export async function fetchListingsBrowse(
+  filters: ListingFilters,
+  pageSize: number,
+  options: FetchOptions = {}
+): Promise<ListingsBrowseResult> {
+  const filterPayload = toFilterPayload(filters, true);
+
+  return runCachedQuery({
+    key: buildCacheKey("rpc_listings_browse", {
+      filters: filterPayload,
+      sort: filters.sort,
+      page: filters.page,
+      pageSize
+    }),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc(
+        "rpc_listings_browse",
+        {
+          p_filters: filterPayload,
+          p_sort: filters.sort,
+          p_page: filters.page,
+          p_page_size: pageSize
+        },
+        signal
+      );
+      const payload = toRecord(data);
+      const rows = toRecordArray(payload.rows).map(toListing);
+
+      return {
+        rows,
+        totalItems: toNumber(payload.total_items),
+        page: Math.max(1, toNumber(payload.page, 1)),
+        pageSize: Math.max(1, toNumber(payload.page_size, pageSize)),
+        totalPages: Math.max(1, toNumber(payload.total_pages, 1))
+      };
+    }
+  });
+}
+
+export async function fetchKpiLive(
+  filters: ListingFilters,
+  bounds?: MapBounds,
+  options: FetchOptions = {}
+): Promise<AnalyticsSnapshot> {
+  const filterPayload = toFilterPayload(filters, true);
+  const boundsPayload = toBoundsPayload(bounds);
+
+  return runCachedQuery({
+    key: buildCacheKey("rpc_kpi_live", {
+      filters: filterPayload,
+      bounds: boundsPayload
+    }),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc(
+        "rpc_kpi_live",
+        {
+          p_filters: filterPayload,
+          p_bounds: boundsPayload
+        },
+        signal
+      );
+      return toSnapshot(data);
+    }
+  });
+}
+
+export async function fetchKpiDaily(
+  filters: ListingFilters,
+  options: FetchOptions = {}
+): Promise<AnalyticsSnapshot> {
+  const analyticsFilters = stripNumericFilterValues(filters);
+  const filterPayload = toFilterPayload(analyticsFilters, false);
+
+  return runCachedQuery({
+    key: buildCacheKey("rpc_kpi_daily", {
+      filters: filterPayload
+    }),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc(
+        "rpc_kpi_daily",
+        {
+          p_filters: filterPayload
+        },
+        signal
+      );
+      return toSnapshot(data);
+    }
+  });
+}
+
+export async function fetchListingsStats(
+  filters: ListingFilters,
+  bounds?: MapBounds,
+  options: FetchOptions = {}
+): Promise<AnalyticsSnapshot> {
+  return fetchKpiLive(filters, bounds, options);
+}
+
+export async function fetchAnalyzeSnapshotDaily(
+  filters: ListingFilters,
+  options: FetchOptions = {}
+): Promise<AnalyzeSnapshotDailyResult> {
+  const analyticsFilters = stripNumericFilterValues(filters);
+  const filterPayload = toFilterPayload(analyticsFilters, false);
+
+  return runCachedQuery({
+    key: buildCacheKey("rpc_analyze_snapshot_daily", {
+      filters: filterPayload
+    }),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc(
+        "rpc_analyze_snapshot_daily",
+        {
+          p_filters: filterPayload
+        },
+        signal
+      );
+      const payload = toRecord(data);
+
+      return {
+        snapshot: toSnapshot(payload),
+        rankings: {
+          region: toGeoRankingRows(payload.rankingsRegion, "region"),
+          city: toGeoRankingRows(payload.rankingsCity, "city"),
+          district: toGeoRankingRows(payload.rankingsDistrict, "district")
+        }
+      };
+    }
+  });
+}
+
+export async function fetchGeoRankings(
+  filters: ListingFilters,
+  level: GeoRankingLevel,
+  options: FetchOptions = {}
+): Promise<GeoRankingRow[]> {
+  const result = await fetchAnalyzeSnapshotDaily(filters, options);
+  return result.rankings[level];
+}
+
+export async function fetchMapPoints(
+  filters: ListingFilters,
+  bounds: MapBounds | undefined,
+  limit = 500,
+  options: FetchOptions = {}
+): Promise<MapPointsResult> {
+  const filterPayload = toFilterPayload(filters, true);
+  const boundsPayload = toBoundsPayload(bounds);
+
+  return runCachedQuery({
+    key: buildCacheKey("rpc_map_points", {
+      filters: filterPayload,
+      bounds: boundsPayload,
+      limit
+    }),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc(
+        "rpc_map_points",
+        {
+          p_filters: filterPayload,
+          p_bounds: boundsPayload,
+          p_limit: limit
+        },
+        signal
+      );
+      const payload = toRecord(data);
+
+      return {
+        rows: toRecordArray(payload.rows).map(toListing),
+        returnedCount: toNumber(payload.returned_count),
+        totalInBounds: toNumber(payload.total_in_bounds)
+      };
+    }
+  });
+}
+
+export async function fetchMapAreaStatsDailyBundle(
+  filters: ListingFilters,
+  options: FetchOptions = {}
+): Promise<MapAreaStatsBundle> {
+  const analyticsFilters = stripNumericFilterValues(filters);
+  const filterPayload = toFilterPayload(analyticsFilters, false);
+
+  return runCachedQuery({
+    key: buildCacheKey("rpc_map_area_stats_daily_bundle", {
+      filters: filterPayload
+    }),
+    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => {
+      const data = await rpc(
+        "rpc_map_area_stats_daily_bundle",
+        {
+          p_filters: filterPayload
+        },
+        signal
+      );
+      const payload = toRecord(data);
+
+      return {
+        region: toMapAreaStats(payload.region, "region"),
+        city: toMapAreaStats(payload.city, "city"),
+        district: toMapAreaStats(payload.district, "district")
+      };
+    }
+  });
+}
+
+export async function fetchMapAreaStats(
+  filters: ListingFilters,
+  level: GeoRankingLevel,
+  _regionCode?: string,
+  _cityCode?: string,
+  options: FetchOptions = {}
+): Promise<MapAreaStat[]> {
+  const bundle = await fetchMapAreaStatsDailyBundle(filters, options);
+  return bundle[level];
 }
 
 export async function fetchLatestListings(limit = 50): Promise<Listing[]> {

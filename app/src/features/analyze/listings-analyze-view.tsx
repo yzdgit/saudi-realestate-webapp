@@ -1,14 +1,12 @@
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
-import { formatNumber, formatPercent } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { getCityLabel, getDistrictLabel, getRegionLabel } from "@/lib/location-codes";
 import type {
   AnalyticsSnapshot,
   GeoRankingLevel,
   GeoRankingRow,
-  ListingFilters,
-  PropertyType,
-  ListingGoal
+  ListingFilters
 } from "@/lib/realestate/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CurrencyValue } from "@/components/ui/currency-value";
@@ -62,19 +60,6 @@ export function ListingsAnalyzeView({
   rankingRows,
   onPatchFilters
 }: Props) {
-  const handleGoalClick = (goal: ListingGoal) => {
-    onPatchFilters(goal === "rent" ? { goal } : { goal, rent_frequency: [] });
-  };
-
-  const handlePropertyTypeClick = (propertyType: PropertyType) => {
-    if (filters.property_type.length === 1 && filters.property_type[0] === propertyType) {
-      onPatchFilters({ property_type: [] });
-      return;
-    }
-
-    onPatchFilters({ property_type: [propertyType] });
-  };
-
   const handleCityClick = (cityCode: string) => {
     if (filters.city.length === 1 && filters.city[0] === cityCode) {
       onPatchFilters({ city: [] });
@@ -96,8 +81,6 @@ export function ListingsAnalyzeView({
         locale={locale}
         messages={messages}
         snapshot={snapshot}
-        onGoalClick={handleGoalClick}
-        onPropertyTypeClick={handlePropertyTypeClick}
         onCityClick={handleCityClick}
       />
 
@@ -106,7 +89,7 @@ export function ListingsAnalyzeView({
           <CardHeader>
             <CardTitle>{getDistrictLabel(focusedDistrict.code, locale)}</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+          <CardContent className="grid grid-cols-2 gap-3 text-sm md:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">{messages.kpi.total_listings}</p>
               <p className="font-semibold">{formatNumber(focusedDistrict.count, locale)}</p>
@@ -116,14 +99,6 @@ export function ListingsAnalyzeView({
               <p className="font-semibold">
                 <CurrencyValue value={focusedDistrict.medianPrice} locale={locale} />
               </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{messages.goal.sale}</p>
-              <p className="font-semibold">{formatPercent(focusedDistrict.saleShare, locale)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{messages.goal.rent}</p>
-              <p className="font-semibold">{formatPercent(focusedDistrict.rentShare, locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -141,8 +116,6 @@ export function ListingsAnalyzeView({
                 <TableHead>{messages.kpi.total_listings}</TableHead>
                 <TableHead>{messages.kpi.median_price}</TableHead>
                 <TableHead>{messages.kpi.median_price_per_m2}</TableHead>
-                <TableHead>{messages.goal.sale}</TableHead>
-                <TableHead>{messages.goal.rent}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -159,8 +132,6 @@ export function ListingsAnalyzeView({
                       <span>/ m²</span>
                     </span>
                   </TableCell>
-                  <TableCell>{formatPercent(row.saleShare, locale)}</TableCell>
-                  <TableCell>{formatPercent(row.rentShare, locale)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

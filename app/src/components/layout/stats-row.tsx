@@ -1,7 +1,8 @@
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
-import { formatArea, formatNumber, formatPercent } from "@/lib/format";
+import { formatArea, formatNumber } from "@/lib/format";
 import type { AnalyticsSnapshot } from "@/lib/realestate/types";
+import { AdPlaceholder } from "@/components/ads/ad-placeholder";
 import { Card, CardContent } from "@/components/ui/card";
 import { CurrencyValue } from "@/components/ui/currency-value";
 
@@ -9,11 +10,14 @@ type Props = {
   locale: Locale;
   messages: LocaleMessages;
   snapshot: AnalyticsSnapshot;
+  replaceMixWithAd?: boolean;
 };
 
-export function StatsRow({ locale, messages, snapshot }: Props) {
+export function StatsRow({ locale, messages, snapshot, replaceMixWithAd = false }: Props) {
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section
+      className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${replaceMixWithAd ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}
+    >
       <Card className="border-border/70 bg-card/80">
         <CardContent className="p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -115,17 +119,7 @@ export function StatsRow({ locale, messages, snapshot }: Props) {
         </CardContent>
       </Card>
 
-      <Card className="border-border/70 bg-card/80">
-        <CardContent className="p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {messages.kpi.rent_sale_mix}
-          </p>
-          <p className="mt-2 text-lg font-semibold text-foreground">
-            {messages.goal.rent} {formatPercent(snapshot.rentShare, locale)} · {messages.goal.sale}{" "}
-            {formatPercent(snapshot.saleShare, locale)}
-          </p>
-        </CardContent>
-      </Card>
+      {replaceMixWithAd ? <AdPlaceholder variant="stats" className="h-full" /> : null}
     </section>
   );
 }

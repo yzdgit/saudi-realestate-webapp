@@ -2,9 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   Scatter,
   ScatterChart,
   XAxis,
@@ -14,24 +11,19 @@ import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
 import { formatNumber } from "@/lib/format";
 import { getCityLabel, getDistrictLabel } from "@/lib/location-codes";
-import type { AnalyticsSnapshot, ListingGoal, PropertyType } from "@/lib/realestate/types";
+import type { AnalyticsSnapshot } from "@/lib/realestate/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CurrencyValue } from "@/components/ui/currency-value";
 import {
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig
+  ChartTooltipContent
 } from "@/components/ui/chart";
 
 type Props = {
   locale: Locale;
   messages: LocaleMessages;
   snapshot: AnalyticsSnapshot;
-  onGoalClick: (goal: ListingGoal) => void;
-  onPropertyTypeClick: (propertyType: PropertyType) => void;
   onCityClick: (city: string) => void;
 };
 
@@ -39,8 +31,6 @@ export function AnalyticsCharts({
   locale,
   messages,
   snapshot,
-  onGoalClick,
-  onPropertyTypeClick,
   onCityClick
 }: Props) {
   const cityDistribution = snapshot.cityDistribution.map((item) => ({
@@ -54,68 +44,8 @@ export function AnalyticsCharts({
     districtLabel: getDistrictLabel(item.districtCode, locale)
   }));
 
-  const goalConfig: ChartConfig = {
-    sale: { label: messages.goal.sale, color: "#22d3ee" },
-    rent: { label: messages.goal.rent, color: "#f59e0b" }
-  };
-
   return (
     <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-      <Card className="border-border/70 bg-card/80">
-        <CardHeader>
-          <CardTitle>{messages.analytics.goal_split}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={goalConfig} className="h-[280px] w-full">
-            <PieChart>
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Pie
-                data={snapshot.goalDistribution}
-                dataKey="value"
-                nameKey="label"
-                innerRadius={68}
-                outerRadius={108}
-                onClick={(item) => onGoalClick(item.key as ListingGoal)}
-              >
-                <Cell fill="#22d3ee" />
-                <Cell fill="#f59e0b" />
-              </Pie>
-              <ChartLegend content={<ChartLegendContent />} />
-            </PieChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70 bg-card/80">
-        <CardHeader>
-          <CardTitle>{messages.analytics.property_mix}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={goalConfig} className="h-[320px] w-full">
-            <BarChart data={snapshot.propertyTypeByGoal}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="propertyType" tickLine={false} axisLine={false} interval={0} angle={-20} dy={12} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar
-                dataKey="sale"
-                stackId="goals"
-                fill="#22d3ee"
-                radius={[4, 4, 0, 0]}
-                onClick={(data) => onPropertyTypeClick(data.propertyType as PropertyType)}
-              />
-              <Bar
-                dataKey="rent"
-                stackId="goals"
-                fill="#f59e0b"
-                radius={[4, 4, 0, 0]}
-                onClick={(data) => onPropertyTypeClick(data.propertyType as PropertyType)}
-              />
-            </BarChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-
       <Card className="border-border/70 bg-card/80">
         <CardHeader>
           <CardTitle>{messages.analytics.city_distribution}</CardTitle>

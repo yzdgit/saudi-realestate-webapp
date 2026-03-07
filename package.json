@@ -7,11 +7,11 @@
     "app"
   ],
   "scripts": {
-    "dev": "bun run --cwd app dev",
-    "build": "bun run --cwd app build",
-    "start": "bun run --cwd app start",
-    "lint": "bun run --cwd app lint",
-    "typecheck": "bun run --cwd app typecheck",
+    "dev": "bun --env-file=.env run --cwd app dev",
+    "build": "bun --env-file=.env run --cwd app build",
+    "start": "bun --env-file=.env run --cwd app start",
+    "lint": "bun --env-file=.env run --cwd app lint",
+    "typecheck": "bun --env-file=.env run --cwd app typecheck",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:db:reset": "supabase db reset",

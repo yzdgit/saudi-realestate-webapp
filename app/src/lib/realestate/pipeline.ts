@@ -47,7 +47,7 @@ export const defaultFilters: ListingFilters = {
 export function normalizeFilters(filters: ListingFilters): ListingFilters {
   return {
     ...filters,
-    rent_frequency: filters.goal === "rent" ? filters.rent_frequency : [],
+    rent_frequency: [],
     district: filters.city.length > 0 ? filters.district : []
   };
 }
@@ -116,8 +116,7 @@ export function parseFiltersFromQuery(query: ParsedUrlQuery): ListingFilters {
   const city = Array.from(new Set(toQueryList(query.city)));
   const district =
     city.length > 0 ? Array.from(new Set(toQueryList(query.district))) : [];
-  const rentFrequency =
-    goal === "rent" ? parseEnumList(query.rent_frequency, rentFrequencyValues) : [];
+  const rentFrequency: RentFrequency[] = [];
 
   return normalizeFilters({
     goal,
@@ -146,10 +145,6 @@ export function serializeFiltersToQuery(filters: ListingFilters): Record<string,
 
   if (normalized.goal !== defaultFilters.goal) {
     query.goal = normalized.goal;
-  }
-
-  if (normalized.rent_frequency.length > 0) {
-    query.rent_frequency = normalized.rent_frequency.join(",");
   }
 
   if (normalized.property_type.length > 0) {
@@ -222,13 +217,6 @@ export function applyListingFilters(
 ): Listing[] {
   return listings.filter((item) => {
     if (item.goal !== filters.goal) {
-      return false;
-    }
-
-    if (
-      filters.rent_frequency.length > 0 &&
-      (!item.rent_frequency || !filters.rent_frequency.includes(item.rent_frequency))
-    ) {
       return false;
     }
 

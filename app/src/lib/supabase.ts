@@ -25,9 +25,19 @@ export function getSupabaseBrowserClient() {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false
+      },
+      global: {
+        headers: {
+          apikey: env.anonKey,
+          Authorization: `Bearer ${env.anonKey}`
+        }
       }
     });
   }
 
   return browserClient;
+}
+
+export function resetSupabaseBrowserClient() {
+  browserClient = null;
 }
