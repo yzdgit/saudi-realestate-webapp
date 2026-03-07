@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 29% 8%;
+    --foreground: 210 20% 96%;
+    --card: 221 24% 11%;
+    --card-foreground: 210 20% 96%;
+    --popover: 221 24% 11%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 191 96% 42%;
+    --primary-foreground: 220 29% 8%;
+    --secondary: 217 19% 17%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 217 19% 17%;
+    --muted-foreground: 215 16% 66%;
+    --accent: 191 82% 25%;
+    --accent-foreground: 210 20% 96%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 96%;
+    --border: 217 19% 23%;
+    --input: 217 19% 23%;
+    --ring: 191 96% 42%;
+    --radius: 0.75rem;
+    --chart-1: 191 96% 42%;
+    --chart-2: 197 88% 55%;
+    --chart-3: 84 81% 44%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 24 95% 53%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #__next {
+    min-height: 100%;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    margin: 0;
+    font-family: "Sora", "IBM Plex Sans Arabic", "Noto Sans Arabic", sans-serif;
+    background-image: radial-gradient(circle at 15% 15%, rgba(20, 184, 166, 0.11), transparent 40%),
+      radial-gradient(circle at 85% 0%, rgba(56, 189, 248, 0.08), transparent 36%);
+  }
+
+  [dir="rtl"] {
+    font-family: "IBM Plex Sans Arabic", "Sora", "Noto Sans Arabic", sans-serif;
+  }
+
+  .leaflet-container {
+    background: hsl(var(--background));
+  }
+
+  .leaflet-pane {
+    will-change: transform;
+  }
+
+  .leaflet-tile-pane,
+  .leaflet-tile-container {
+    background: hsl(var(--background));
+  }
+
+  .leaflet-tile {
+    background: hsl(var(--background));
+  }
+
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .leaflet-control-zoom a {
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border-color: hsl(var(--border));
+  }
+
+  .leaflet-control-attribution {
+    background: rgba(15, 23, 42, 0.6);
+    color: hsl(var(--muted-foreground));
+    border-radius: 6px;
+  }
+}

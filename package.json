@@ -1,0 +1,21 @@
+{
+  "name": "realestate-eda",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "bun@1.2.5",
+  "workspaces": [
+    "app"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd app dev",
+    "build": "bun run --cwd app build",
+    "start": "bun run --cwd app start",
+    "lint": "bun run --cwd app lint",
+    "typecheck": "bun run --cwd app typecheck",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:db:reset": "supabase db reset",
+    "supabase:migration:new": "supabase migration new",
+    "supabase:functions:serve": "supabase functions serve"
+  }
+}

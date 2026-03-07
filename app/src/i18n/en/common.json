@@ -1,0 +1,185 @@
+{
+  "navigation": {
+    "home": "Home",
+    "listings": "Listings",
+    "map": "Map",
+    "analytics": "Analytics",
+    "browse": "Browse",
+    "analyze": "Analyze",
+    "switch_locale": "AR"
+  },
+  "home": {
+    "title": "Real Estate Explorer",
+    "heading": "Real Estate Data Explorer",
+    "description": "Explore listings with map insights and data science analytics.",
+    "cards": {
+      "listings_title": "Listings Explorer",
+      "listings_description": "Browse listings in table/card modes with rich filters.",
+      "map_title": "Map Explorer",
+      "map_description": "Inspect geospatial patterns with clusters and intensity overlays.",
+      "analytics_title": "Analytics Dashboard",
+      "analytics_description": "Analyze pricing, distribution, and property mix with interactive charts."
+    },
+    "open": "Open"
+  },
+  "common": {
+    "all": "All",
+    "count": "Count",
+    "not_available": "N/A",
+    "min": "Min",
+    "mean": "Mean",
+    "median": "Median",
+    "max": "Max"
+  },
+  "filters": {
+    "title": "Filters",
+    "open_filters": "Open Filters",
+    "clear_all": "Clear all",
+    "active_filters": "Active Filters",
+    "goal": "Goal",
+    "listing_type": "Listing type",
+    "sort": "Sort",
+    "view": "View",
+    "source": "Source",
+    "property_type": "Property type",
+    "region": "Region",
+    "city": "City",
+    "district": "District",
+    "price_min": "Min price",
+    "price_max": "Max price",
+    "area_min": "Min area",
+    "area_max": "Max area",
+    "bedrooms_min": "Min beds",
+    "bathrooms_min": "Min baths",
+    "rooms_min": "Min rooms",
+    "in_view": "Only in map view"
+  },
+  "goal": {
+    "sale": "Sale",
+    "rent": "Rent"
+  },
+  "source": {
+    "aqar": "Aqar",
+    "bayut": "Bayut",
+    "dealapp": "Dealapp"
+  },
+  "listing_type": {
+    "residential": "Residential",
+    "commercial": "Commercial",
+    "all": "All"
+  },
+  "property_type": {
+    "apartment": "Apartment",
+    "villa": "Villa",
+    "land": "Land",
+    "duplex": "Duplex",
+    "townhouse": "Townhouse",
+    "office": "Office",
+    "shop": "Shop",
+    "warehouse": "Warehouse",
+    "building": "Building",
+    "farm": "Farm",
+    "chalet": "Chalet",
+    "compound": "Compound",
+    "floor": "Floor",
+    "studio": "Studio",
+    "other": "Other"
+  },
+  "rent_frequency": {
+    "monthly": "Monthly",
+    "quarterly": "Quarterly",
+    "semi": "Semi-annual",
+    "annually": "Annual"
+  },
+  "sorting": {
+    "newest": "Default",
+    "price_desc": "Price (high to low)",
+    "price_asc": "Price (low to high)",
+    "area_desc": "Area (high to low)",
+    "area_asc": "Area (low to high)",
+    "price_per_m2_desc": "Price/m² (high to low)",
+    "price_per_m2_asc": "Price/m² (low to high)",
+    "bedrooms_desc": "Bedrooms (high to low)"
+  },
+  "view": {
+    "table": "Table",
+    "cards": "Cards"
+  },
+  "kpi": {
+    "total_listings": "Total listings",
+    "price_stats": "Price",
+    "price_per_m2_stats": "Price/m²",
+    "area_stats": "Area",
+    "median_price": "Median price",
+    "median_price_per_m2": "Median price/m²",
+    "median_area": "Median area",
+    "rent_sale_mix": "Rent / Sale mix"
+  },
+  "listings": {
+    "title": "Listings Explorer",
+    "description": "Filter, sort, compare, and inspect listing details.",
+    "source": "Source",
+    "goal": "Goal",
+    "property_type": "Property type",
+    "location": "Location",
+    "price": "Price",
+    "area": "Area",
+    "price_per_m2": "Price/m²",
+    "rooms": "Rooms",
+    "bedrooms": "Bedrooms",
+    "bathrooms": "Bathrooms",
+    "living_rooms": "Living rooms",
+    "rent_frequency": "Rent frequency",
+    "region": "Region",
+    "coordinates": "Coordinates",
+    "open_source": "Open source listing",
+    "details_title": "Listing Details",
+    "no_selection": "Select any listing from table/cards/map to inspect details.",
+    "compare": "Compare",
+    "compare_selected": "Compare selected listings",
+    "page": "Page",
+    "no_results_title": "No results found",
+    "no_results_description": "Try widening your filters or clear them to restore all listings."
+  },
+  "map": {
+    "title": "Map Explorer",
+    "description": "Explore listings on map with clustering and intensity overlays.",
+    "legend_title": "Map Legend",
+    "overlay_mode": "Overlay mode",
+    "mode_markers": "Clustered markers",
+    "mode_intensity": "Price/m² intensity",
+    "visible_listings": "Visible listings",
+    "hierarchy": "Map hierarchy",
+    "level_region": "Region level",
+    "level_city": "City level",
+    "level_district": "District level",
+    "selectable_areas": "Selectable areas",
+    "recenter": "Recenter to data",
+    "map_hint": "Drag to explore. Click boundaries or dots to drill down.",
+    "no_listings_area": "No listings in current filters",
+    "intensity_legend": "Intensity scale",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "very_high": "Very high"
+  },
+  "analytics": {
+    "title": "Analytics Dashboard",
+    "description": "Explore market, geospatial, and property mix insights with interactive charts.",
+    "charts_tab": "Charts",
+    "geo_tab": "Geo analytics",
+    "source_distribution": "Source distribution",
+    "goal_split": "Goal split",
+    "property_mix": "Property type mix",
+    "city_distribution": "City distribution",
+    "district_price_per_m2": "District avg price/m²",
+    "price_histogram": "Price histogram",
+    "area_histogram": "Area histogram",
+    "area_price_scatter": "Area vs price",
+    "geo_description": "City-level spatial summary for filtered listings."
+  },
+  "pagination": {
+    "previous": "Previous",
+    "next": "Next"
+  }
+}

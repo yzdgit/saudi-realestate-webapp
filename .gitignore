@@ -1,0 +1,22 @@
+# Dependencies
+node_modules
+
+# Bun
+bun.lockb
+
+# Build outputs
+.next
+out
+dist
+
+# Env
+.env
+.env.local
+app/.env.local
+
+# Supabase local state
+supabase/.temp
+.legacy/
+.temp/
+
+.DS_Store

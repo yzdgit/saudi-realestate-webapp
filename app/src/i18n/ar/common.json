@@ -1,0 +1,185 @@
+{
+  "navigation": {
+    "home": "الرئيسية",
+    "listings": "العروض",
+    "map": "الخريطة",
+    "analytics": "التحليلات",
+    "browse": "استكشاف",
+    "analyze": "تحليل",
+    "switch_locale": "EN"
+  },
+  "home": {
+    "title": "مستكشف العقارات",
+    "heading": "مستكشف بيانات العقارات",
+    "description": "استكشف العروض مع تحليلات مكانية ورسوم بيانية تفاعلية.",
+    "cards": {
+      "listings_title": "مستكشف العروض",
+      "listings_description": "تصفح العروض كجدول أو بطاقات مع مرشحات متقدمة.",
+      "map_title": "مستكشف الخريطة",
+      "map_description": "حلّل الأنماط الجغرافية بالتجميع وطبقات الكثافة.",
+      "analytics_title": "لوحة التحليلات",
+      "analytics_description": "حلّل الأسعار والتوزيعات ومزيج أنواع العقارات برسوم تفاعلية."
+    },
+    "open": "فتح"
+  },
+  "common": {
+    "all": "الكل",
+    "count": "العدد",
+    "not_available": "غير متاح",
+    "min": "الأدنى",
+    "mean": "المتوسط",
+    "median": "الوسيط",
+    "max": "الأعلى"
+  },
+  "filters": {
+    "title": "المرشحات",
+    "open_filters": "فتح المرشحات",
+    "clear_all": "مسح الكل",
+    "active_filters": "المرشحات النشطة",
+    "goal": "الغرض",
+    "listing_type": "نوع الإدراج",
+    "sort": "الترتيب",
+    "view": "طريقة العرض",
+    "source": "المصدر",
+    "property_type": "نوع العقار",
+    "region": "المنطقة",
+    "city": "المدينة",
+    "district": "الحي",
+    "price_min": "أدنى سعر",
+    "price_max": "أعلى سعر",
+    "area_min": "أدنى مساحة",
+    "area_max": "أعلى مساحة",
+    "bedrooms_min": "أدنى غرف نوم",
+    "bathrooms_min": "أدنى حمامات",
+    "rooms_min": "أدنى غرف",
+    "in_view": "المعروض داخل نطاق الخريطة فقط"
+  },
+  "goal": {
+    "sale": "بيع",
+    "rent": "إيجار"
+  },
+  "source": {
+    "aqar": "عقار",
+    "bayut": "بيوت",
+    "dealapp": "ديل آب"
+  },
+  "listing_type": {
+    "residential": "سكني",
+    "commercial": "تجاري",
+    "all": "الكل"
+  },
+  "property_type": {
+    "apartment": "شقة",
+    "villa": "فيلا",
+    "land": "أرض",
+    "duplex": "دوبلكس",
+    "townhouse": "تاون هاوس",
+    "office": "مكتب",
+    "shop": "محل",
+    "warehouse": "مستودع",
+    "building": "عمارة",
+    "farm": "مزرعة",
+    "chalet": "شاليه",
+    "compound": "كمباوند",
+    "floor": "دور",
+    "studio": "استوديو",
+    "other": "أخرى"
+  },
+  "rent_frequency": {
+    "monthly": "شهري",
+    "quarterly": "ربع سنوي",
+    "semi": "نصف سنوي",
+    "annually": "سنوي"
+  },
+  "sorting": {
+    "newest": "الافتراضي",
+    "price_desc": "السعر (من الأعلى إلى الأقل)",
+    "price_asc": "السعر (من الأقل إلى الأعلى)",
+    "area_desc": "المساحة (من الأعلى إلى الأقل)",
+    "area_asc": "المساحة (من الأقل إلى الأعلى)",
+    "price_per_m2_desc": "سعر/م² (من الأعلى إلى الأقل)",
+    "price_per_m2_asc": "سعر/م² (من الأقل إلى الأعلى)",
+    "bedrooms_desc": "غرف النوم (من الأعلى إلى الأقل)"
+  },
+  "view": {
+    "table": "جدول",
+    "cards": "بطاقات"
+  },
+  "kpi": {
+    "total_listings": "إجمالي العروض",
+    "price_stats": "السعر",
+    "price_per_m2_stats": "السعر/م²",
+    "area_stats": "المساحة",
+    "median_price": "الوسيط السعري",
+    "median_price_per_m2": "وسيط سعر/م²",
+    "median_area": "وسيط المساحة",
+    "rent_sale_mix": "نسبة الإيجار / البيع"
+  },
+  "listings": {
+    "title": "مستكشف العروض",
+    "description": "رشّح ورتّب وقارن واستعرض تفاصيل كل عرض.",
+    "source": "المصدر",
+    "goal": "الغرض",
+    "property_type": "نوع العقار",
+    "location": "الموقع",
+    "price": "السعر",
+    "area": "المساحة",
+    "price_per_m2": "السعر/م²",
+    "rooms": "الغرف",
+    "bedrooms": "غرف النوم",
+    "bathrooms": "الحمامات",
+    "living_rooms": "غرف المعيشة",
+    "rent_frequency": "دورية الإيجار",
+    "region": "المنطقة",
+    "coordinates": "الإحداثيات",
+    "open_source": "فتح الإعلان الأصلي",
+    "details_title": "تفاصيل العرض",
+    "no_selection": "اختر أي عرض من الجدول أو البطاقات أو الخريطة لعرض التفاصيل.",
+    "compare": "مقارنة",
+    "compare_selected": "مقارنة العروض المحددة",
+    "page": "الصفحة",
+    "no_results_title": "لا توجد نتائج",
+    "no_results_description": "جرّب توسيع المرشحات أو مسحها لاسترجاع جميع العروض."
+  },
+  "map": {
+    "title": "مستكشف الخريطة",
+    "description": "استكشف العروض على الخريطة مع التجميع وطبقات الكثافة.",
+    "legend_title": "مفتاح الخريطة",
+    "overlay_mode": "وضع الطبقة",
+    "mode_markers": "علامات مجمعة",
+    "mode_intensity": "كثافة سعر/م²",
+    "visible_listings": "العروض المرئية",
+    "hierarchy": "التدرج المكاني",
+    "level_region": "مستوى المناطق",
+    "level_city": "مستوى المدن",
+    "level_district": "مستوى الأحياء",
+    "selectable_areas": "المناطق القابلة للاختيار",
+    "recenter": "إعادة التمركز على البيانات",
+    "map_hint": "اسحب للاستكشاف. اضغط الحدود أو النقاط للتدرج.",
+    "no_listings_area": "لا توجد عروض ضمن المرشحات الحالية",
+    "intensity_legend": "مقياس الكثافة",
+    "low": "منخفض",
+    "medium": "متوسط",
+    "high": "مرتفع",
+    "very_high": "مرتفع جدًا"
+  },
+  "analytics": {
+    "title": "لوحة التحليلات",
+    "description": "استكشف السوق والجغرافيا ومزيج العقارات برسوم تفاعلية.",
+    "charts_tab": "الرسوم",
+    "geo_tab": "التحليل الجغرافي",
+    "source_distribution": "توزيع المصادر",
+    "goal_split": "توزيع الغرض",
+    "property_mix": "مزيج أنواع العقار",
+    "city_distribution": "توزيع المدن",
+    "district_price_per_m2": "متوسط سعر/م² حسب الحي",
+    "price_histogram": "توزيع الأسعار",
+    "area_histogram": "توزيع المساحات",
+    "area_price_scatter": "المساحة مقابل السعر",
+    "geo_description": "ملخص جغرافي على مستوى المدينة للعروض المفلترة."
+  },
+  "pagination": {
+    "previous": "السابق",
+    "next": "التالي"
+  }
+}

@@ -1,0 +1,193 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+type CsvRow = Record<string, string>;
+
+function parseCsv(content: string): CsvRow[] {
+  const lines = content.replace(/\r/g, "").split("\n").filter((line) => line.trim().length > 0);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  const headers = parseCsvLine(lines[0]);
+  const rows: CsvRow[] = [];
+
+  for (const line of lines.slice(1)) {
+    const values = parseCsvLine(line);
+
+    if (values.length === 0) {
+      continue;
+    }
+
+    const row: CsvRow = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] ?? "";
+    });
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+
+    if (char === "\"") {
+      if (inQuotes && line[index + 1] === "\"") {
+        current += "\"";
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current);
+  return values.map((value) => value.trim());
+}
+
+function toMap(rows: CsvRow[]): Record<string, { en: string; ar: string }> {
+  const sortedRows = rows
+    .filter((row) => row.code)
+    .slice()
+    .sort((left, right) => Number(left.code) - Number(right.code));
+
+  return sortedRows.reduce<Record<string, { en: string; ar: string }>>((acc, row) => {
+    acc[row.code] = {
+      en: row.en,
+      ar: row.ar
+    };
+
+    return acc;
+  }, {});
+}
+
+function toCityParents(rows: CsvRow[]): Record<string, { regionCode: string }> {
+  const sortedRows = rows
+    .filter((row) => row.code && row.region_code)
+    .slice()
+    .sort((left, right) => Number(left.code) - Number(right.code));
+
+  return sortedRows.reduce<Record<string, { regionCode: string }>>((acc, row) => {
+    acc[row.code] = { regionCode: row.region_code };
+    return acc;
+  }, {});
+}
+
+function toDistrictParents(
+  rows: CsvRow[]
+): Record<string, { cityCode: string; regionCode: string }> {
+  const sortedRows = rows
+    .filter((row) => row.code && row.city_code && row.region_code)
+    .slice()
+    .sort((left, right) => Number(left.code) - Number(right.code));
+
+  return sortedRows.reduce<Record<string, { cityCode: string; regionCode: string }>>((acc, row) => {
+    acc[row.code] = {
+      cityCode: row.city_code,
+      regionCode: row.region_code
+    };
+    return acc;
+  }, {});
+}
+
+function pickByCodes(rows: CsvRow[], codes: Set<string>): CsvRow[] {
+  return rows.filter((row) => codes.has(row.code));
+}
+
+function extractCodes(pattern: RegExp, input: string): Set<string> {
+  const result = new Set<string>();
+  const regex = new RegExp(pattern.source, pattern.flags);
+
+  let match = regex.exec(input);
+  while (match) {
+    if (match[1]) {
+      result.add(match[1]);
+    }
+    match = regex.exec(input);
+  }
+
+  return result;
+}
+
+function mergeCodeSets(...sets: Set<string>[]): Set<string> {
+  const merged = new Set<string>();
+
+  for (const codeSet of sets) {
+    for (const code of codeSet) {
+      merged.add(code);
+    }
+  }
+
+  return merged;
+}
+
+const root = process.cwd();
+const codesDir = join(root, "src", "data", "codes");
+const outPath = join(root, "src", "lib", "location-codes.generated.ts");
+const mockDataPath = join(root, "src", "lib", "realestate", "mock-data.ts");
+
+const regions = parseCsv(readFileSync(join(codesDir, "regions.csv"), "utf8"));
+const cities = parseCsv(readFileSync(join(codesDir, "cities.csv"), "utf8"));
+const districts = parseCsv(readFileSync(join(codesDir, "districts.csv"), "utf8"));
+const mockData = readFileSync(mockDataPath, "utf8");
+
+const usedRegionCodes = extractCodes(/region_code:\s*"([^"]+)"/g, mockData);
+const usedCityCodes = extractCodes(/city_code:\s*"([^"]+)"/g, mockData);
+const usedDistrictCodes = extractCodes(/district_code:\s*"([^"]+)"/g, mockData);
+
+const selectedDistricts = pickByCodes(districts, usedDistrictCodes);
+const parentCityCodesFromDistricts = new Set(
+  selectedDistricts.map((row) => row.city_code).filter(Boolean)
+);
+const parentRegionCodesFromCities = new Set(
+  pickByCodes(cities, mergeCodeSets(usedCityCodes, parentCityCodesFromDistricts))
+    .map((row) => row.region_code)
+    .filter(Boolean)
+);
+const parentRegionCodesFromDistricts = new Set(
+  selectedDistricts.map((row) => row.region_code).filter(Boolean)
+);
+
+const selectedCities = pickByCodes(cities, mergeCodeSets(usedCityCodes, parentCityCodesFromDistricts));
+const selectedRegions = pickByCodes(
+  regions,
+  mergeCodeSets(usedRegionCodes, parentRegionCodesFromCities, parentRegionCodesFromDistricts)
+);
+
+const output = `/* This file is auto-generated by scripts/generate-location-codes.ts */
+/* eslint-disable */
+
+export type LocalizedLabel = {
+  en: string;
+  ar: string;
+};
+
+export const regionCodes: Record<string, LocalizedLabel> = ${JSON.stringify(toMap(selectedRegions), null, 2)};
+
+export const cityCodes: Record<string, LocalizedLabel> = ${JSON.stringify(toMap(selectedCities), null, 2)};
+
+export const cityParentCodes: Record<string, { regionCode: string }> = ${JSON.stringify(toCityParents(selectedCities), null, 2)};
+
+export const districtCodes: Record<string, LocalizedLabel> = ${JSON.stringify(toMap(selectedDistricts), null, 2)};
+
+export const districtParentCodes: Record<string, { cityCode: string; regionCode: string }> = ${JSON.stringify(toDistrictParents(selectedDistricts), null, 2)};
+`;
+
+writeFileSync(outPath, output, "utf8");
+console.log(`Generated ${outPath}`);
