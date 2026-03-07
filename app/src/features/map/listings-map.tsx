@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import L from "leaflet";
 import Supercluster from "supercluster";
+import { X } from "lucide-react";
 import {
   CircleMarker,
   MapContainer,
@@ -9,14 +10,13 @@ import {
   Pane,
   Popup,
   TileLayer,
-  Tooltip,
   useMap,
   useMapEvents
 } from "react-leaflet";
 import type { ExplorerMode } from "@/lib/explorer-mode";
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
-import { formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getCityLabel,
   getCityRegionCode,
@@ -28,6 +28,7 @@ import type {
   BoundaryFeatureMeta,
   Listing,
   ListingFilters,
+  MapAreaStat,
   MapBounds,
   MapCameraIntent,
   MapLevel,
@@ -70,6 +71,7 @@ type Props = {
   listings: Listing[];
   overlayMode: MapOverlayMode;
   mode: ExplorerMode;
+  areaStatsByLevel?: Partial<Record<MapLevel, MapAreaStat[]>>;
   recenterSignal?: number;
   onPatchFilters: (patch: Partial<ListingFilters>) => void;
   onSelectListing: (listing: Listing) => void;
@@ -113,6 +115,12 @@ const LEVEL_COLORS: Record<MapLevel, { stroke: string; fill: string }> = {
     stroke: "#3b82f6",
     fill: "#2563eb"
   }
+};
+
+const LEVEL_FILL_RANGE: Record<MapLevel, { min: number; max: number }> = {
+  region: { min: 0.05, max: 0.24 },
+  city: { min: 0.05, max: 0.36 },
+  district: { min: 0.05, max: 0.5 }
 };
 
 function sameBounds(left: MapBounds | undefined, right: MapBounds): boolean {
@@ -440,6 +448,9 @@ function BoundaryGeoJsonLayer({
   valueByCode,
   minValue,
   maxValue,
+  countByCode,
+  minCount,
+  maxCount,
   locale,
   messages,
   statsByCode,
@@ -455,6 +466,9 @@ function BoundaryGeoJsonLayer({
   valueByCode: Map<string, number>;
   minValue: number;
   maxValue: number;
+  countByCode: Map<string, number>;
+  minCount: number;
+  maxCount: number;
   locale: Locale;
   messages: LocaleMessages;
   statsByCode: Map<string, AreaStats>;
@@ -466,17 +480,39 @@ function BoundaryGeoJsonLayer({
   const layerRef = useRef<L.GeoJSON | null>(null);
 
   useEffect(() => {
+    const fillOpacityFor = (code: string, isSelected: boolean): number => {
+      const listingsCount = countByCode.get(code) ?? 0;
+
+      if (listingsCount <= 0) {
+        return 0;
+      }
+
+      const fillRange = LEVEL_FILL_RANGE[level];
+      const baseOpacity =
+        maxCount <= minCount
+          ? fillRange.max
+          : fillRange.min +
+            ((listingsCount - minCount) / (maxCount - minCount)) * (fillRange.max - fillRange.min);
+
+      if (!Number.isFinite(baseOpacity)) {
+        return fillRange.min;
+      }
+
+      return Math.min(0.65, isSelected ? baseOpacity + 0.08 : baseOpacity);
+    };
+
     const styleFor = (code: string, selectable: boolean): L.PathOptions => {
       const isSelected = selectedCode === code;
       const areaValue = valueByCode.get(code) ?? minValue;
       const color = intensityMode ? intensityColor(areaValue, minValue, maxValue) : colors.stroke;
       const fillColor = intensityMode ? color : colors.fill;
+      const fillOpacity = fillOpacityFor(code, isSelected);
 
       return {
         color: isSelected ? "#f8fafc" : color,
         weight: isSelected ? 2.6 : intensityMode ? 2 : 1.45,
         fillColor,
-        fillOpacity: intensityMode ? (isSelected ? 0.32 : selectable ? 0.22 : 0.1) : isSelected ? 0.22 : selectable ? 0.14 : 0.06,
+        fillOpacity,
         dashArray: selectable ? undefined : "4 4"
       };
     };
@@ -509,9 +545,23 @@ function BoundaryGeoJsonLayer({
       if (meta) {
         const stats = statsByCode.get(code);
         const tooltipLabel = displayLabel(meta, locale);
-        const totalListings = formatNumber(stats?.totalListings ?? 0, locale);
+        const totalListingsValue = stats?.totalListings ?? 0;
+        const totalListings = formatNumber(totalListingsValue, locale);
+        const tooltipLines = [
+          `<strong>${tooltipLabel}</strong>`,
+          `${messages.kpi.total_listings}: ${totalListings}`
+        ];
 
-        pathLayer.bindTooltip(`${tooltipLabel}<br/>${messages.kpi.total_listings}: ${totalListings}`, {
+        if (totalListingsValue > 0) {
+          tooltipLines.push(
+            `${messages.kpi.median_price}: ${formatCurrency(stats?.medianPrice ?? 0, locale)}`,
+            `${messages.kpi.median_price_per_m2}: ${formatCurrency(stats?.medianPricePerM2 ?? 0, locale)} / m²`
+          );
+        } else {
+          tooltipLines.push(messages.map.no_listings_area);
+        }
+
+        pathLayer.bindTooltip(tooltipLines.join("<br/>"), {
           sticky: true,
           direction: "center",
           opacity: 0.95
@@ -532,13 +582,19 @@ function BoundaryGeoJsonLayer({
     locale,
     map,
     maxValue,
+    maxCount,
     messages.kpi.total_listings,
+    messages.kpi.median_price,
+    messages.kpi.median_price_per_m2,
+    messages.map.no_listings_area,
     metaByCode,
+    minCount,
     minValue,
     onAreaClick,
     selectedCode,
     statsByCode,
-    valueByCode
+    valueByCode,
+    countByCode
   ]);
 
   useEffect(() => {
@@ -591,14 +647,8 @@ function BoundaryLayer({
   );
 
   const isSelectable = useCallback(
-    (code: string) => {
-      if (level !== "district") {
-        return true;
-      }
-
-      return (statsByCode.get(code)?.totalListings ?? 0) > 0;
-    },
-    [level, statsByCode]
+    (_code: string) => true,
+    []
   );
 
   const valueByCode = useMemo(() => {
@@ -621,77 +671,46 @@ function BoundaryLayer({
     return [Math.min(...values), Math.max(...values)] as const;
   }, [valueByCode]);
 
+  const countByCode = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const meta of visibleMeta) {
+      counts.set(meta.code, statsByCode.get(meta.code)?.totalListings ?? 0);
+    }
+
+    return counts;
+  }, [statsByCode, visibleMeta]);
+
+  const [minCount, maxCount] = useMemo(() => {
+    const values = Array.from(countByCode.values()).filter((value) => value > 0);
+
+    if (values.length === 0) {
+      return [0, 0] as const;
+    }
+
+    return [Math.min(...values), Math.max(...values)] as const;
+  }, [countByCode]);
+
   return (
-    <>
-      <BoundaryGeoJsonLayer
-        collection={collection}
-        level={level}
-        selectedCode={selectedCode}
-        colors={colors}
-        intensityMode={intensityMode}
-        valueByCode={valueByCode}
-        minValue={minValue}
-        maxValue={maxValue}
-        locale={locale}
-        messages={messages}
-        statsByCode={statsByCode}
-        isSelectable={isSelectable}
-        metaByCode={metaByCode}
-        onAreaClick={onAreaClick}
-      />
-
-      {visibleMeta.map((meta) => {
-        const stats = statsByCode.get(meta.code);
-
-        const selectable = isSelectable(meta.code);
-
-        return (
-          <CircleMarker
-            key={`${level}-dot-${meta.code}`}
-            center={meta.center}
-            radius={5}
-            pane="boundary-dot-pane"
-            pathOptions={{
-              color: "#f8fafc",
-              fillColor: colors.stroke,
-              fillOpacity: selectable ? 0.95 : 0.5,
-              weight: 1.1,
-              dashArray: selectable ? undefined : "2 3"
-            }}
-            eventHandlers={{
-              click: () => {
-                if (!selectable) {
-                  return;
-                }
-
-                onAreaClick(meta, true);
-              }
-            }}
-          >
-            <Tooltip direction="top" opacity={0.95}>
-              <div className="space-y-1 text-xs">
-                <p className="font-semibold">{displayLabel(meta, locale)}</p>
-                <p>
-                  {messages.kpi.total_listings}: {formatNumber(stats?.totalListings ?? 0, locale)}
-                </p>
-                <p className="inline-flex items-center gap-1">
-                  <span>{messages.kpi.median_price}:</span>
-                  <CurrencyValue value={stats?.medianPrice ?? 0} locale={locale} />
-                </p>
-                <p className="inline-flex items-center gap-1">
-                  <span>{messages.kpi.median_price_per_m2}:</span>
-                  <CurrencyValue value={stats?.medianPricePerM2 ?? 0} locale={locale} />
-                  <span>/ m²</span>
-                </p>
-                {!selectable ? (
-                  <p className="text-[11px] text-muted-foreground">{messages.map.no_listings_area}</p>
-                ) : null}
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        );
-      })}
-    </>
+    <BoundaryGeoJsonLayer
+      collection={collection}
+      level={level}
+      selectedCode={selectedCode}
+      colors={colors}
+      intensityMode={intensityMode}
+      valueByCode={valueByCode}
+      minValue={minValue}
+      maxValue={maxValue}
+      countByCode={countByCode}
+      minCount={minCount}
+      maxCount={maxCount}
+      locale={locale}
+      messages={messages}
+      statsByCode={statsByCode}
+      isSelectable={isSelectable}
+      metaByCode={metaByCode}
+      onAreaClick={onAreaClick}
+    />
   );
 }
 
@@ -702,6 +721,7 @@ export function ListingsMap({
   listings,
   overlayMode,
   mode,
+  areaStatsByLevel,
   recenterSignal,
   onPatchFilters,
   onSelectListing,
@@ -824,7 +844,28 @@ export function ListingsMap({
     return (districtIndex?.all ?? []).filter((meta) => meta.cityCode === selectionPath.cityCode);
   }, [cityIndex?.all, districtIndex?.all, effectiveDisplayLevel, regionIndex?.all, selectionPath.cityCode, selectionPath.regionCode]);
 
-  const statsByCode = useMemo(() => statsByCodeForLevel(effectiveDisplayLevel, listings), [effectiveDisplayLevel, listings]);
+  const externalStatsByCode = useMemo(() => {
+    const source = areaStatsByLevel?.[effectiveDisplayLevel] ?? [];
+    const mapped = new Map<string, AreaStats>();
+
+    for (const row of source) {
+      mapped.set(row.code, {
+        totalListings: row.totalListings,
+        medianPrice: row.medianPrice,
+        medianPricePerM2: row.medianPricePerM2
+      });
+    }
+
+    return mapped;
+  }, [areaStatsByLevel, effectiveDisplayLevel]);
+
+  const statsByCode = useMemo(() => {
+    if (externalStatsByCode.size > 0) {
+      return externalStatsByCode;
+    }
+
+    return statsByCodeForLevel(effectiveDisplayLevel, listings);
+  }, [effectiveDisplayLevel, externalStatsByCode, listings]);
 
   const selectedCode =
     effectiveDisplayLevel === "region"
@@ -832,15 +873,39 @@ export function ListingsMap({
       : effectiveDisplayLevel === "city"
         ? selectionPath.cityCode
         : selectionPath.districtCode;
-  const showListingLayer = !isAnalyzeMode && effectiveDisplayLevel === "district";
+  const showListingLayer = !isAnalyzeMode && Boolean(selectionPath.districtCode);
 
-  const selectableBoundaryCount = useMemo(() => {
-    if (effectiveDisplayLevel !== "district") {
-      return visibleBoundaryMeta.length;
+  const selectedCityName = useMemo(() => {
+    if (!selectionPath.cityCode) {
+      return undefined;
     }
 
-    return visibleBoundaryMeta.filter((meta) => (statsByCode.get(meta.code)?.totalListings ?? 0) > 0).length;
-  }, [effectiveDisplayLevel, statsByCode, visibleBoundaryMeta]);
+    const cityMeta = boundaryMetaLookup.cityByCode.get(selectionPath.cityCode);
+    if (cityMeta) {
+      return displayLabel(cityMeta, locale);
+    }
+
+    const fallback = getCityLabel(selectionPath.cityCode, locale);
+    return fallback === selectionPath.cityCode ? undefined : fallback;
+  }, [boundaryMetaLookup.cityByCode, locale, selectionPath.cityCode]);
+
+  const selectedDistrictName = useMemo(() => {
+    if (!selectionPath.districtCode) {
+      return undefined;
+    }
+
+    const districtMeta = boundaryMetaLookup.districtByCode.get(selectionPath.districtCode);
+    if (districtMeta) {
+      return displayLabel(districtMeta, locale);
+    }
+
+    const fallback = getDistrictLabel(selectionPath.districtCode, locale);
+    return fallback === selectionPath.districtCode ? undefined : fallback;
+  }, [boundaryMetaLookup.districtByCode, locale, selectionPath.districtCode]);
+
+  const selectableBoundaryCount = useMemo(() => {
+    return visibleBoundaryMeta.length;
+  }, [visibleBoundaryMeta]);
 
   const listingById = useMemo(() => {
     const map = new Map<string, Listing>();
@@ -1011,6 +1076,45 @@ export function ListingsMap({
   const handleMapReady = useCallback((map: L.Map | null) => {
     mapRef.current = map;
   }, []);
+
+  const clearDistrictSelection = useCallback(() => {
+    if (!selectionPath.districtCode) {
+      return;
+    }
+
+    patchFiltersFromMap({ district: [] }, false);
+
+    const target = computeFitTarget(
+      {
+        ...selectionPath,
+        districtCode: undefined,
+        lockedByClick: false
+      },
+      boundaryMetaLookup,
+      listings
+    );
+    runCameraToTarget("boundary_click", target);
+  }, [boundaryMetaLookup, listings, patchFiltersFromMap, runCameraToTarget, selectionPath]);
+
+  const clearCitySelection = useCallback(() => {
+    if (!selectionPath.cityCode && !selectionPath.districtCode) {
+      return;
+    }
+
+    patchFiltersFromMap({ city: [], district: [] }, false);
+
+    const target = computeFitTarget(
+      {
+        ...selectionPath,
+        cityCode: undefined,
+        districtCode: undefined,
+        lockedByClick: false
+      },
+      boundaryMetaLookup,
+      listings
+    );
+    runCameraToTarget("boundary_click", target);
+  }, [boundaryMetaLookup, listings, patchFiltersFromMap, runCameraToTarget, selectionPath]);
 
   const handleClusterMove = useCallback(
     (clusterCenter: [number, number], clusterZoom: number) => {
@@ -1325,6 +1429,45 @@ export function ListingsMap({
         </div>
       ) : null}
 
+      {selectionPath.cityCode || selectionPath.districtCode ? (
+        <div className="absolute bottom-3 start-3 z-[1000] flex flex-col gap-2">
+          {selectionPath.cityCode ? (
+            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background/90 px-2 py-1 text-xs backdrop-blur">
+              <span className="text-muted-foreground">{messages.filters.city}:</span>
+              <span className="font-medium text-foreground">
+                {selectedCityName ?? messages.common.not_available}
+              </span>
+              <button
+                type="button"
+                onClick={clearCitySelection}
+                className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                title={messages.filters.clear_all}
+                aria-label={messages.filters.clear_all}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : null}
+          {selectionPath.districtCode ? (
+            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background/90 px-2 py-1 text-xs backdrop-blur">
+              <span className="text-muted-foreground">{messages.filters.district}:</span>
+              <span className="font-medium text-foreground">
+                {selectedDistrictName ?? messages.common.not_available}
+              </span>
+              <button
+                type="button"
+                onClick={clearDistrictSelection}
+                className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                title={messages.filters.clear_all}
+                aria-label={messages.filters.clear_all}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <MapContainer
         center={center}
         zoom={6}
@@ -1335,7 +1478,6 @@ export function ListingsMap({
         className="h-[58vh] min-h-[420px] w-full rounded-xl border border-border/70 bg-slate-950"
       >
         <Pane name="boundary-pane" style={{ zIndex: 320 }} />
-        <Pane name="boundary-dot-pane" style={{ zIndex: 420 }} />
         <Pane name="cluster-pane" style={{ zIndex: 520 }} />
         <Pane name="listing-pane" style={{ zIndex: 560 }} />
 

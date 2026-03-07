@@ -4,6 +4,7 @@ import { parseExplorerMode, type ExplorerMode } from "@/lib/explorer-mode";
 import type { Locale } from "@/lib/i18n";
 import {
   defaultFilters,
+  normalizeFilters,
   parseFiltersFromQuery,
   serializeFiltersToQuery,
   withResetPage
@@ -17,7 +18,7 @@ type SetterOptions = {
 export function useUrlFilters(locale: Locale) {
   const router = useRouter();
 
-  const filters = useMemo(() => parseFiltersFromQuery(router.query), [router.query]);
+  const filters = useMemo(() => normalizeFilters(parseFiltersFromQuery(router.query)), [router.query]);
   const mode = useMemo(() => parseExplorerMode(router.query.mode), [router.query.mode]);
 
   useEffect(() => {
@@ -60,7 +61,8 @@ export function useUrlFilters(locale: Locale) {
               ...updater
             };
 
-      const finalFilters = options.resetPage ? withResetPage(next) : next;
+      const normalizedNext = normalizeFilters(next);
+      const finalFilters = options.resetPage ? withResetPage(normalizedNext) : normalizedNext;
       const query = {
         locale,
         mode,

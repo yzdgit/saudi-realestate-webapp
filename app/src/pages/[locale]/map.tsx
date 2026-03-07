@@ -6,6 +6,7 @@ import { useRouter } from "next/router";
 import { AdPlaceholder } from "@/components/ads/ad-placeholder";
 import { ExplorerShell } from "@/components/layout/explorer-shell";
 import { StatsRow } from "@/components/layout/stats-row";
+import { Card, CardContent } from "@/components/ui/card";
 import { ActiveFilterChips } from "@/features/filters/active-filter-chips";
 import { FilterPanelDesktop, FilterPanelMobile } from "@/features/filters/filter-panel";
 import { useUrlFilters } from "@/features/filters/use-url-filters";
@@ -14,9 +15,16 @@ import { MapLegend } from "@/features/map/map-legend";
 import type { MapOverlayMode } from "@/features/map/listings-map";
 import { localeStaticPaths, localeStaticProps, type LocalePageProps } from "@/lib/locale-static";
 import { getMessages } from "@/lib/messages";
-import { getFilterOptions, getMockListings } from "@/lib/realestate/mock-repository";
-import { applyListingFilters, buildAnalyticsSnapshot } from "@/lib/realestate/pipeline";
-import type { Listing, MapBounds } from "@/lib/realestate/types";
+import {
+  EMPTY_ANALYTICS_SNAPSHOT,
+  EMPTY_FILTER_OPTIONS,
+  EMPTY_MAP_POINTS_RESULT,
+  fetchFilterOptions,
+  fetchListingsStats,
+  fetchMapAreaStats,
+  fetchMapPoints
+} from "@/lib/queries/realestate";
+import type { Listing, MapAreaStat, MapBounds, MapLevel } from "@/lib/realestate/types";
 import { useLocaleDocument } from "@/lib/use-locale-document";
 
 const ListingsMap = dynamic(
@@ -38,32 +46,28 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
   const messages = getMessages(locale);
   const { mode, setMode, filters, setFilters, resetFilters, hrefQuery } = useUrlFilters(locale);
   const mapInViewDefaultAppliedRef = useRef(false);
-
-  const listings = useMemo(() => getMockListings(), []);
-  const filterOptions = useMemo(() => getFilterOptions(listings), [listings]);
+  const dataRequestRef = useRef(0);
+  const areaRequestRef = useRef(0);
 
   const [bounds, setBounds] = useState<MapBounds | undefined>();
+  const [debouncedBounds, setDebouncedBounds] = useState<MapBounds | undefined>();
   const [overlayMode, setOverlayMode] = useState<MapOverlayMode>("markers");
+  const [filterOptions, setFilterOptions] = useState(EMPTY_FILTER_OPTIONS);
+  const [stats, setStats] = useState(EMPTY_ANALYTICS_SNAPSHOT);
+  const [mapPoints, setMapPoints] = useState(EMPTY_MAP_POINTS_RESULT);
+  const [areaStatsByLevel, setAreaStatsByLevel] = useState<Partial<Record<MapLevel, MapAreaStat[]>>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const isAnalyzeMode = mode === "analyze";
   const effectiveOverlayMode: MapOverlayMode = isAnalyzeMode ? "intensity" : overlayMode;
-
-  const baseFiltered = useMemo(
-    () => applyListingFilters(listings, { ...filters, in_view: false }),
-    [filters, listings]
+  const mapListings = useMemo(
+    () => (mode === "browse" ? mapPoints.rows : []),
+    [mapPoints.rows, mode]
   );
-
-  const viewportFiltered = useMemo(() => {
-    if (!bounds) {
-      return baseFiltered;
-    }
-
-    return applyListingFilters(baseFiltered, { ...filters, in_view: true }, bounds);
-  }, [baseFiltered, bounds, filters]);
-
-  const mapListings = filters.in_view ? viewportFiltered : baseFiltered;
-  const stats = useMemo(() => buildAnalyticsSnapshot(mapListings), [mapListings]);
+  const visibleCount = mode === "browse" ? mapPoints.returnedCount : stats.totalListings;
+  const totalCount = mode === "browse" ? mapPoints.totalInBounds : stats.totalListings;
 
   useEffect(() => {
     if (isAnalyzeMode) {
@@ -72,6 +76,100 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
       setIsDetailsOpen(false);
     }
   }, [isAnalyzeMode]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedBounds(bounds);
+    }, 280);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [bounds]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    void fetchFilterOptions()
+      .then((result) => {
+        if (!isCancelled) {
+          setFilterOptions(result);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setFilterOptions(EMPTY_FILTER_OPTIONS);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const requestId = dataRequestRef.current + 1;
+    dataRequestRef.current = requestId;
+    setIsLoading(true);
+    setError(null);
+
+    const effectiveBounds = filters.in_view ? debouncedBounds : undefined;
+    const pointsPromise = mode === "browse" && filters.district.length > 0
+      ? fetchMapPoints(filters, effectiveBounds, 500)
+      : Promise.resolve(EMPTY_MAP_POINTS_RESULT);
+
+    void Promise.all([fetchListingsStats(filters, effectiveBounds), pointsPromise])
+      .then(([nextStats, nextPoints]) => {
+        if (dataRequestRef.current !== requestId) {
+          return;
+        }
+
+        setStats(nextStats);
+        setMapPoints(nextPoints);
+      })
+      .catch((nextError) => {
+        if (dataRequestRef.current !== requestId) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : "Failed to load map data");
+        setMapPoints(EMPTY_MAP_POINTS_RESULT);
+      })
+      .finally(() => {
+        if (dataRequestRef.current === requestId) {
+          setIsLoading(false);
+        }
+      });
+  }, [debouncedBounds, filters, mode]);
+
+  useEffect(() => {
+    const requestId = areaRequestRef.current + 1;
+    areaRequestRef.current = requestId;
+
+    void Promise.all([
+      fetchMapAreaStats(filters, "region"),
+      fetchMapAreaStats(filters, "city", filters.region[0]),
+      fetchMapAreaStats(filters, "district", filters.region[0], filters.city[0])
+    ])
+      .then(([regionStats, cityStats, districtStats]) => {
+        if (areaRequestRef.current !== requestId) {
+          return;
+        }
+
+        setAreaStatsByLevel({
+          region: regionStats,
+          city: cityStats,
+          district: districtStats
+        });
+      })
+      .catch((nextError) => {
+        if (areaRequestRef.current !== requestId) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : "Failed to load map area stats");
+      });
+  }, [filters]);
 
   useEffect(() => {
     if (!router.isReady || mapInViewDefaultAppliedRef.current) {
@@ -147,6 +245,16 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
         hrefQuery={hrefQuery}
       >
         <AdPlaceholder variant="stats" />
+        {error ? (
+          <Card className="border-destructive/40 bg-card/80">
+            <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
+          </Card>
+        ) : null}
+        {isLoading && mapPoints.rows.length === 0 && stats.totalListings === 0 ? (
+          <Card className="border-border/70 bg-card/80">
+            <CardContent className="py-3 text-sm text-muted-foreground">Loading map data...</CardContent>
+          </Card>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <ListingsMap
@@ -156,6 +264,7 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
             listings={mapListings}
             overlayMode={effectiveOverlayMode}
             mode={mode}
+            areaStatsByLevel={areaStatsByLevel}
             onPatchFilters={setFilters}
             onSelectListing={openListingDetails}
             onViewportChange={setBounds}
@@ -166,8 +275,8 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
             overlayMode={effectiveOverlayMode}
             onOverlayModeChange={setOverlayMode}
             isAnalyzeMode={isAnalyzeMode}
-            visibleCount={viewportFiltered.length}
-            totalCount={baseFiltered.length}
+            visibleCount={visibleCount}
+            totalCount={totalCount}
           />
         </div>
       </ExplorerShell>

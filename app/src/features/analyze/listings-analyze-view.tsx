@@ -1,14 +1,15 @@
-import { useMemo } from "react";
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { getCityLabel, getDistrictLabel, getRegionLabel } from "@/lib/location-codes";
-import {
-  buildAnalyticsSnapshot,
-  buildGeoRankingRows,
-  getGeoDrillLevel
-} from "@/lib/realestate/pipeline";
-import type { GeoRankingLevel, ListingFilters, PropertyType, ListingGoal, Listing } from "@/lib/realestate/types";
+import type {
+  AnalyticsSnapshot,
+  GeoRankingLevel,
+  GeoRankingRow,
+  ListingFilters,
+  PropertyType,
+  ListingGoal
+} from "@/lib/realestate/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CurrencyValue } from "@/components/ui/currency-value";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +19,9 @@ type Props = {
   locale: Locale;
   messages: LocaleMessages;
   filters: ListingFilters;
-  listings: Listing[];
+  drillLevel: GeoRankingLevel;
+  snapshot: AnalyticsSnapshot;
+  rankingRows: GeoRankingRow[];
   onPatchFilters: (patch: Partial<ListingFilters>) => void;
 };
 
@@ -54,13 +57,11 @@ export function ListingsAnalyzeView({
   locale,
   messages,
   filters,
-  listings,
+  drillLevel,
+  snapshot,
+  rankingRows,
   onPatchFilters
 }: Props) {
-  const snapshot = useMemo(() => buildAnalyticsSnapshot(listings), [listings]);
-  const drillLevel = useMemo(() => getGeoDrillLevel(filters), [filters]);
-  const rankingRows = useMemo(() => buildGeoRankingRows(listings, drillLevel), [drillLevel, listings]);
-
   const handleGoalClick = (goal: ListingGoal) => {
     onPatchFilters(goal === "rent" ? { goal } : { goal, rent_frequency: [] });
   };
@@ -85,8 +86,8 @@ export function ListingsAnalyzeView({
 
   const selectedDistrictCode = filters.district[0];
   const focusedDistrict =
-    selectedDistrictCode
-      ? rankingRows.find((row) => row.code === selectedDistrictCode) ?? rankingRows[0]
+    drillLevel === "district" && selectedDistrictCode
+      ? rankingRows.find((row) => row.code === selectedDistrictCode)
       : undefined;
 
   return (

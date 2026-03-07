@@ -34,6 +34,7 @@
   "filters": {
     "title": "المرشحات",
     "open_filters": "فتح المرشحات",
+    "apply": "تطبيق المرشحات",
     "clear_all": "مسح الكل",
     "active_filters": "المرشحات النشطة",
     "goal": "الغرض",

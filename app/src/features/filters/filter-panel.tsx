@@ -1,7 +1,8 @@
-import type { ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Building2, Filter, KeyRound, Landmark, Home } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
+import { defaultFilters, normalizeFilters, withResetPage } from "@/lib/realestate/pipeline";
 import type { FilterOptionSet, ListingFilters, ListingSort } from "@/lib/realestate/types";
 import {
   getCityLabel,
@@ -89,6 +90,10 @@ function getVisibleDistrictOptions(
   selectedRegions: string[],
   selectedCities: string[]
 ): string[] {
+  if (selectedCities.length === 0) {
+    return [];
+  }
+
   const regionSet = new Set(selectedRegions);
   const citySet = new Set(selectedCities);
 
@@ -106,6 +111,36 @@ function getVisibleDistrictOptions(
 
     return true;
   });
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
+function areFiltersEqual(left: ListingFilters, right: ListingFilters): boolean {
+  return (
+    left.goal === right.goal &&
+    left.listing_type === right.listing_type &&
+    left.sort === right.sort &&
+    left.page === right.page &&
+    left.in_view === right.in_view &&
+    left.price_min === right.price_min &&
+    left.price_max === right.price_max &&
+    left.area_min === right.area_min &&
+    left.area_max === right.area_max &&
+    left.bedrooms_min === right.bedrooms_min &&
+    left.bathrooms_min === right.bathrooms_min &&
+    left.rooms_min === right.rooms_min &&
+    areStringArraysEqual(left.rent_frequency, right.rent_frequency) &&
+    areStringArraysEqual(left.property_type, right.property_type) &&
+    areStringArraysEqual(left.region, right.region) &&
+    areStringArraysEqual(left.city, right.city) &&
+    areStringArraysEqual(left.district, right.district)
+  );
 }
 
 type IconToggleOption<T extends string> = {
@@ -164,21 +199,44 @@ function FilterPanelBody({
   showInViewToggle = false,
   compact = false
 }: FilterPanelProps) {
-  const visibleCities = getVisibleCityOptions(options, filters.region);
-  const visibleDistricts = getVisibleDistrictOptions(options, filters.region, filters.city);
+  const normalizedFilters = useMemo(() => normalizeFilters(filters), [filters]);
+  const [draftFilters, setDraftFilters] = useState<ListingFilters>(() => normalizedFilters);
+
+  useEffect(() => {
+    setDraftFilters(normalizedFilters);
+  }, [normalizedFilters]);
+
+  const visibleCities = getVisibleCityOptions(options, draftFilters.region);
+  const visibleDistricts = getVisibleDistrictOptions(options, draftFilters.region, draftFilters.city);
+  const hasPendingChanges = useMemo(
+    () => !areFiltersEqual(draftFilters, normalizedFilters),
+    [draftFilters, normalizedFilters]
+  );
+
+  const patchDraft = (
+    patch: Partial<ListingFilters>,
+    patchOptions: PatchOptions = { resetPage: true }
+  ) => {
+    setDraftFilters((current) => {
+      const next = normalizeFilters({
+        ...current,
+        ...patch
+      });
+
+      return patchOptions.resetPage === false ? next : withResetPage(next);
+    });
+  };
 
   const onRegionToggle = (regionCode: string) => {
-    const nextRegion = toggleString(filters.region, regionCode);
+    const nextRegion = toggleString(draftFilters.region, regionCode);
     const nextVisibleCitySet = new Set(getVisibleCityOptions(options, nextRegion));
-    const nextCity = filters.city.filter((cityCode) => nextVisibleCitySet.has(cityCode));
-    const nextVisibleDistrictSet = new Set(
-      getVisibleDistrictOptions(options, nextRegion, nextCity)
-    );
-    const nextDistrict = filters.district.filter((districtCode) =>
+    const nextCity = draftFilters.city.filter((cityCode) => nextVisibleCitySet.has(cityCode));
+    const nextVisibleDistrictSet = new Set(getVisibleDistrictOptions(options, nextRegion, nextCity));
+    const nextDistrict = draftFilters.district.filter((districtCode) =>
       nextVisibleDistrictSet.has(districtCode)
     );
 
-    onPatch({
+    patchDraft({
       region: nextRegion as ListingFilters["region"],
       city: nextCity as ListingFilters["city"],
       district: nextDistrict as ListingFilters["district"]
@@ -186,18 +244,27 @@ function FilterPanelBody({
   };
 
   const onCityToggle = (cityCode: string) => {
-    const nextCity = toggleString(filters.city, cityCode);
+    const nextCity = toggleString(draftFilters.city, cityCode);
     const nextVisibleDistrictSet = new Set(
-      getVisibleDistrictOptions(options, filters.region, nextCity)
+      getVisibleDistrictOptions(options, draftFilters.region, nextCity)
     );
-    const nextDistrict = filters.district.filter((districtCode) =>
+    const nextDistrict = draftFilters.district.filter((districtCode) =>
       nextVisibleDistrictSet.has(districtCode)
     );
 
-    onPatch({
+    patchDraft({
       city: nextCity as ListingFilters["city"],
       district: nextDistrict as ListingFilters["district"]
     });
+  };
+
+  const onApply = () => {
+    onPatch(draftFilters, { resetPage: false });
+  };
+
+  const onClearAll = () => {
+    setDraftFilters(defaultFilters);
+    onReset();
   };
 
   return (
@@ -205,7 +272,7 @@ function FilterPanelBody({
       <CardHeader className={compact ? "p-4" : "p-5"}>
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base">{messages.filters.title}</CardTitle>
-          <Button variant="ghost" size="sm" onClick={onReset}>
+          <Button variant="ghost" size="sm" onClick={onClearAll}>
             {messages.filters.clear_all}
           </Button>
         </div>
@@ -214,9 +281,9 @@ function FilterPanelBody({
         <div className="space-y-2">
           <Label>{messages.filters.goal}</Label>
           <IconRadioToggle
-            value={filters.goal}
+            value={draftFilters.goal}
             onChange={(value) =>
-              onPatch(value === "rent" ? { goal: value } : { goal: value, rent_frequency: [] })
+              patchDraft(value === "rent" ? { goal: value } : { goal: value, rent_frequency: [] })
             }
             options={[
               { value: "sale", label: messages.goal.sale, icon: Landmark },
@@ -228,8 +295,8 @@ function FilterPanelBody({
         <div className="space-y-2">
           <Label>{messages.filters.listing_type}</Label>
           <IconRadioToggle
-            value={filters.listing_type}
-            onChange={(value) => onPatch({ listing_type: value })}
+            value={draftFilters.listing_type}
+            onChange={(value) => patchDraft({ listing_type: value })}
             options={[
               { value: "residential", label: messages.listing_type.residential, icon: Home },
               { value: "commercial", label: messages.listing_type.commercial, icon: Building2 }
@@ -239,7 +306,10 @@ function FilterPanelBody({
 
         <div className="space-y-2">
           <Label>{messages.filters.sort}</Label>
-          <Select value={filters.sort} onValueChange={(value) => onPatch({ sort: value as ListingSort })}>
+          <Select
+            value={draftFilters.sort}
+            onValueChange={(value) => patchDraft({ sort: value as ListingSort })}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -255,18 +325,18 @@ function FilterPanelBody({
 
         <Separator />
 
-        {filters.goal === "rent" ? (
+        {draftFilters.goal === "rent" ? (
           <div className="space-y-2">
             <Label>{messages.listings.rent_frequency}</Label>
             <div className="grid gap-2">
               {options.rent_frequency.map((frequency) => (
                 <label key={frequency} className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Checkbox
-                    checked={filters.rent_frequency.includes(frequency)}
+                    checked={draftFilters.rent_frequency.includes(frequency)}
                     onCheckedChange={() =>
-                      onPatch({
+                      patchDraft({
                         rent_frequency: toggleString(
-                          filters.rent_frequency,
+                          draftFilters.rent_frequency,
                           frequency
                         ) as ListingFilters["rent_frequency"]
                       })
@@ -285,10 +355,13 @@ function FilterPanelBody({
             {options.property_type.map((type) => (
               <label key={type} className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Checkbox
-                  checked={filters.property_type.includes(type)}
+                  checked={draftFilters.property_type.includes(type)}
                   onCheckedChange={() =>
-                    onPatch({
-                      property_type: toggleString(filters.property_type, type) as ListingFilters["property_type"]
+                    patchDraft({
+                      property_type: toggleString(
+                        draftFilters.property_type,
+                        type
+                      ) as ListingFilters["property_type"]
                     })
                   }
                 />
@@ -304,8 +377,8 @@ function FilterPanelBody({
             <Input
               id="price_min"
               inputMode="numeric"
-              value={filters.price_min ?? ""}
-              onChange={(event) => onPatch({ price_min: parseNumber(event.target.value) })}
+              value={draftFilters.price_min ?? ""}
+              onChange={(event) => patchDraft({ price_min: parseNumber(event.target.value) })}
             />
           </div>
           <div className="space-y-2">
@@ -313,8 +386,8 @@ function FilterPanelBody({
             <Input
               id="price_max"
               inputMode="numeric"
-              value={filters.price_max ?? ""}
-              onChange={(event) => onPatch({ price_max: parseNumber(event.target.value) })}
+              value={draftFilters.price_max ?? ""}
+              onChange={(event) => patchDraft({ price_max: parseNumber(event.target.value) })}
             />
           </div>
         </div>
@@ -325,8 +398,8 @@ function FilterPanelBody({
             <Input
               id="area_min"
               inputMode="numeric"
-              value={filters.area_min ?? ""}
-              onChange={(event) => onPatch({ area_min: parseNumber(event.target.value) })}
+              value={draftFilters.area_min ?? ""}
+              onChange={(event) => patchDraft({ area_min: parseNumber(event.target.value) })}
             />
           </div>
           <div className="space-y-2">
@@ -334,8 +407,8 @@ function FilterPanelBody({
             <Input
               id="area_max"
               inputMode="numeric"
-              value={filters.area_max ?? ""}
-              onChange={(event) => onPatch({ area_max: parseNumber(event.target.value) })}
+              value={draftFilters.area_max ?? ""}
+              onChange={(event) => patchDraft({ area_max: parseNumber(event.target.value) })}
             />
           </div>
         </div>
@@ -346,8 +419,8 @@ function FilterPanelBody({
             <Input
               id="bedrooms_min"
               inputMode="numeric"
-              value={filters.bedrooms_min ?? ""}
-              onChange={(event) => onPatch({ bedrooms_min: parseNumber(event.target.value) })}
+              value={draftFilters.bedrooms_min ?? ""}
+              onChange={(event) => patchDraft({ bedrooms_min: parseNumber(event.target.value) })}
             />
           </div>
           <div className="space-y-2">
@@ -355,8 +428,8 @@ function FilterPanelBody({
             <Input
               id="bathrooms_min"
               inputMode="numeric"
-              value={filters.bathrooms_min ?? ""}
-              onChange={(event) => onPatch({ bathrooms_min: parseNumber(event.target.value) })}
+              value={draftFilters.bathrooms_min ?? ""}
+              onChange={(event) => patchDraft({ bathrooms_min: parseNumber(event.target.value) })}
             />
           </div>
           <div className="space-y-2">
@@ -364,8 +437,8 @@ function FilterPanelBody({
             <Input
               id="rooms_min"
               inputMode="numeric"
-              value={filters.rooms_min ?? ""}
-              onChange={(event) => onPatch({ rooms_min: parseNumber(event.target.value) })}
+              value={draftFilters.rooms_min ?? ""}
+              onChange={(event) => patchDraft({ rooms_min: parseNumber(event.target.value) })}
             />
           </div>
         </div>
@@ -375,7 +448,10 @@ function FilterPanelBody({
           <div className="grid max-h-32 gap-2 overflow-y-auto pr-1">
             {options.region.map((region) => (
               <label key={region} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox checked={filters.region.includes(region)} onCheckedChange={() => onRegionToggle(region)} />
+                <Checkbox
+                  checked={draftFilters.region.includes(region)}
+                  onCheckedChange={() => onRegionToggle(region)}
+                />
                 <span>{getRegionLabel(region, locale)}</span>
               </label>
             ))}
@@ -388,7 +464,7 @@ function FilterPanelBody({
             {visibleCities.map((city) => (
               <label key={city} className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Checkbox
-                  checked={filters.city.includes(city)}
+                  checked={draftFilters.city.includes(city)}
                   onCheckedChange={() => onCityToggle(city)}
                 />
                 <span>{getCityLabel(city, locale)}</span>
@@ -397,24 +473,26 @@ function FilterPanelBody({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>{messages.filters.district}</Label>
-          <div className="grid max-h-32 gap-2 overflow-y-auto pr-1">
-            {visibleDistricts.map((district) => (
-              <label key={district} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={filters.district.includes(district)}
-                  onCheckedChange={() =>
-                    onPatch({
-                      district: toggleString(filters.district, district) as ListingFilters["district"]
-                    })
-                  }
-                />
-                <span>{getDistrictLabel(district, locale)}</span>
-              </label>
-            ))}
+        {draftFilters.city.length > 0 ? (
+          <div className="space-y-2">
+            <Label>{messages.filters.district}</Label>
+            <div className="grid max-h-32 gap-2 overflow-y-auto pr-1">
+              {visibleDistricts.map((district) => (
+                <label key={district} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Checkbox
+                    checked={draftFilters.district.includes(district)}
+                    onCheckedChange={() =>
+                      patchDraft({
+                        district: toggleString(draftFilters.district, district) as ListingFilters["district"]
+                      })
+                    }
+                  />
+                  <span>{getDistrictLabel(district, locale)}</span>
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {showInViewToggle ? (
           <div className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2">
@@ -423,11 +501,15 @@ function FilterPanelBody({
             </Label>
             <Switch
               id="in-view"
-              checked={filters.in_view}
-              onCheckedChange={(checked) => onPatch({ in_view: checked }, { resetPage: false })}
+              checked={draftFilters.in_view}
+              onCheckedChange={(checked) => patchDraft({ in_view: checked }, { resetPage: false })}
             />
           </div>
         ) : null}
+
+        <Button className="w-full" onClick={onApply} disabled={!hasPendingChanges}>
+          {messages.filters.apply}
+        </Button>
       </CardContent>
     </Card>
   );

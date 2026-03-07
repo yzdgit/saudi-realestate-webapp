@@ -148,6 +148,18 @@ export interface MapViewportState {
   onlyInView: boolean;
 }
 
+export interface MapAreaStat {
+  level: MapLevel;
+  code: string;
+  totalListings: number;
+  meanPrice: number;
+  medianPrice: number;
+  meanPricePerM2: number;
+  medianPricePerM2: number;
+  rentShare: number;
+  saleShare: number;
+}
+
 export interface LabelValueDatum {
   key: string;
   label: string;

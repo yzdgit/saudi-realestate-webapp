@@ -1,7 +1,116 @@
--- Optional local seed data.
+-- Optional local seed data for backend v1 schema.
 
-insert into public.listings (source, external_id, title, city, district, price, area_m2, listed_at)
+insert into public.listings (
+  source,
+  external_id,
+  listing_uri,
+  goal,
+  rent_frequency,
+  price,
+  area_m2,
+  rooms,
+  bedrooms,
+  bathrooms,
+  living_rooms,
+  property_type,
+  listing_type,
+  region_code,
+  city_code,
+  district_code,
+  latitude,
+  longitude,
+  listed_at,
+  is_active
+)
 values
-  ('aqar', 'seed-aqar-1', 'Seed Listing A', 'Riyadh', 'Al Olaya', 1200000, 220, now()),
-  ('bayut', 'seed-bayut-1', 'Seed Listing B', 'Jeddah', 'Al Rawdah', 950000, 180, now())
-on conflict (source, external_id) do nothing;
+  (
+    'aqar',
+    'seed-aqar-1',
+    'https://aqar.example/listings/seed-aqar-1',
+    'sale',
+    null,
+    1200000,
+    220,
+    6,
+    4,
+    4,
+    2,
+    'villa',
+    'residential',
+    '1',
+    '3',
+    '10100003075',
+    24.7138,
+    46.6753,
+    now() - interval '2 days',
+    true
+  ),
+  (
+    'bayut',
+    'seed-bayut-1',
+    'https://bayut.example/listings/seed-bayut-1',
+    'rent',
+    'monthly',
+    6500,
+    140,
+    5,
+    3,
+    3,
+    1,
+    'apartment',
+    'residential',
+    '2',
+    '18',
+    '10200018112',
+    21.5291,
+    39.1725,
+    now() - interval '1 day',
+    true
+  ),
+  (
+    'dealapp',
+    'seed-dealapp-1',
+    'https://dealapp.example/listings/seed-dealapp-1',
+    'sale',
+    null,
+    2400000,
+    420,
+    9,
+    6,
+    6,
+    2,
+    'building',
+    'commercial',
+    '5',
+    '113',
+    '10500113022',
+    26.2734,
+    50.1996,
+    now() - interval '3 days',
+    true
+  )
+on conflict (source, external_id) do update
+set
+  listing_uri = excluded.listing_uri,
+  goal = excluded.goal,
+  rent_frequency = excluded.rent_frequency,
+  price = excluded.price,
+  area_m2 = excluded.area_m2,
+  rooms = excluded.rooms,
+  bedrooms = excluded.bedrooms,
+  bathrooms = excluded.bathrooms,
+  living_rooms = excluded.living_rooms,
+  property_type = excluded.property_type,
+  listing_type = excluded.listing_type,
+  region_code = excluded.region_code,
+  city_code = excluded.city_code,
+  district_code = excluded.district_code,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  listed_at = excluded.listed_at,
+  is_active = excluded.is_active,
+  last_seen_at = now(),
+  updated_at = now();
+
+select analytics.capture_daily_snapshots(current_date);
+select public.refresh_read_models();

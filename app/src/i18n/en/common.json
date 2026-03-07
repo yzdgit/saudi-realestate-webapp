@@ -34,6 +34,7 @@
   "filters": {
     "title": "Filters",
     "open_filters": "Open Filters",
+    "apply": "Apply filters",
     "clear_all": "Clear all",
     "active_filters": "Active Filters",
     "goal": "Goal",

@@ -31,6 +31,22 @@ describe("realestate pipeline", () => {
     expect(serialized.in_view).toBe("1");
   });
 
+  it("drops district filter when no city is selected", () => {
+    const parsed = parseFiltersFromQuery({
+      district: "10100003075"
+    });
+
+    expect(parsed.city).toEqual([]);
+    expect(parsed.district).toEqual([]);
+
+    const serialized = serializeFiltersToQuery({
+      ...parsed,
+      district: ["10100003075"]
+    });
+
+    expect(serialized.district).toBeUndefined();
+  });
+
   it("filters listings by goal and price", () => {
     const listings = getMockListings();
 

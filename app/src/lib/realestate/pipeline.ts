@@ -44,6 +44,14 @@ export const defaultFilters: ListingFilters = {
   in_view: false
 };
 
+export function normalizeFilters(filters: ListingFilters): ListingFilters {
+  return {
+    ...filters,
+    rent_frequency: filters.goal === "rent" ? filters.rent_frequency : [],
+    district: filters.city.length > 0 ? filters.district : []
+  };
+}
+
 const toQueryList = (value: string | string[] | undefined): string[] => {
   if (!value) {
     return [];
@@ -105,17 +113,20 @@ const parseEnumList = <T extends readonly string[]>(
 export function parseFiltersFromQuery(query: ParsedUrlQuery): ListingFilters {
   const page = toInteger(query.page);
   const goal = parseEnum(query.goal, goalValues, defaultFilters.goal);
+  const city = Array.from(new Set(toQueryList(query.city)));
+  const district =
+    city.length > 0 ? Array.from(new Set(toQueryList(query.district))) : [];
   const rentFrequency =
     goal === "rent" ? parseEnumList(query.rent_frequency, rentFrequencyValues) : [];
 
-  return {
+  return normalizeFilters({
     goal,
     rent_frequency: rentFrequency,
     property_type: Array.from(new Set(toQueryList(query.property_type))) as PropertyType[],
     listing_type: parseEnum(query.listing_type, listingTypeValues, defaultFilters.listing_type) as ListingType,
     region: Array.from(new Set(toQueryList(query.region))),
-    city: Array.from(new Set(toQueryList(query.city))),
-    district: Array.from(new Set(toQueryList(query.district))),
+    city,
+    district,
     price_min: toNumber(query.price_min),
     price_max: toNumber(query.price_max),
     area_min: toNumber(query.area_min),
@@ -126,77 +137,78 @@ export function parseFiltersFromQuery(query: ParsedUrlQuery): ListingFilters {
     sort: parseEnum(query.sort, sortValues, "newest") as ListingSort,
     page: page && page > 0 ? page : 1,
     in_view: query.in_view === "1"
-  };
+  });
 }
 
 export function serializeFiltersToQuery(filters: ListingFilters): Record<string, string> {
+  const normalized = normalizeFilters(filters);
   const query: Record<string, string> = {};
 
-  if (filters.goal !== defaultFilters.goal) {
-    query.goal = filters.goal;
+  if (normalized.goal !== defaultFilters.goal) {
+    query.goal = normalized.goal;
   }
 
-  if (filters.rent_frequency.length > 0) {
-    query.rent_frequency = filters.rent_frequency.join(",");
+  if (normalized.rent_frequency.length > 0) {
+    query.rent_frequency = normalized.rent_frequency.join(",");
   }
 
-  if (filters.property_type.length > 0) {
-    query.property_type = filters.property_type.join(",");
+  if (normalized.property_type.length > 0) {
+    query.property_type = normalized.property_type.join(",");
   }
 
-  if (filters.listing_type !== defaultFilters.listing_type) {
-    query.listing_type = filters.listing_type;
+  if (normalized.listing_type !== defaultFilters.listing_type) {
+    query.listing_type = normalized.listing_type;
   }
 
-  if (filters.region.length > 0) {
-    query.region = filters.region.join(",");
+  if (normalized.region.length > 0) {
+    query.region = normalized.region.join(",");
   }
 
-  if (filters.city.length > 0) {
-    query.city = filters.city.join(",");
+  if (normalized.city.length > 0) {
+    query.city = normalized.city.join(",");
   }
 
-  if (filters.district.length > 0) {
-    query.district = filters.district.join(",");
+  if (normalized.district.length > 0) {
+    query.district = normalized.district.join(",");
   }
 
-  if (typeof filters.price_min === "number") {
-    query.price_min = String(filters.price_min);
+  if (typeof normalized.price_min === "number") {
+    query.price_min = String(normalized.price_min);
   }
 
-  if (typeof filters.price_max === "number") {
-    query.price_max = String(filters.price_max);
+  if (typeof normalized.price_max === "number") {
+    query.price_max = String(normalized.price_max);
   }
 
-  if (typeof filters.area_min === "number") {
-    query.area_min = String(filters.area_min);
+  if (typeof normalized.area_min === "number") {
+    query.area_min = String(normalized.area_min);
   }
 
-  if (typeof filters.area_max === "number") {
-    query.area_max = String(filters.area_max);
+  if (typeof normalized.area_max === "number") {
+    query.area_max = String(normalized.area_max);
   }
 
-  if (typeof filters.bedrooms_min === "number") {
-    query.bedrooms_min = String(filters.bedrooms_min);
+  if (typeof normalized.bedrooms_min === "number") {
+    query.bedrooms_min = String(normalized.bedrooms_min);
   }
 
-  if (typeof filters.bathrooms_min === "number") {
-    query.bathrooms_min = String(filters.bathrooms_min);
+  if (typeof normalized.bathrooms_min === "number") {
+    query.bathrooms_min = String(normalized.bathrooms_min);
   }
 
-  if (typeof filters.rooms_min === "number") {
-    query.rooms_min = String(filters.rooms_min);
+  if (typeof normalized.rooms_min === "number") {
+    query.rooms_min = String(normalized.rooms_min);
   }
 
-  if (filters.sort !== "newest") {
-    query.sort = filters.sort;
+  if (normalized.sort !== "newest") {
+    query.sort = normalized.sort;
   }
 
-  if (filters.page > 1) {
-    query.page = String(filters.page);
+  if (normalized.page > 1) {
+    query.page = String(normalized.page);
   }
 
-  if (filters.in_view) {
+  if (normalized.in_view) {
     query.in_view = "1";
   }
 
@@ -619,31 +631,33 @@ export function toggleValue<T extends string>(items: T[], value: T): T[] {
 }
 
 export function hasActiveFilters(filters: ListingFilters): boolean {
+  const normalized = normalizeFilters(filters);
+
   return (
-    filters.goal !== defaultFilters.goal ||
-    filters.rent_frequency.length > 0 ||
-    filters.property_type.length > 0 ||
-    filters.listing_type !== defaultFilters.listing_type ||
-    filters.region.length > 0 ||
-    filters.city.length > 0 ||
-    filters.district.length > 0 ||
-    typeof filters.price_min === "number" ||
-    typeof filters.price_max === "number" ||
-    typeof filters.area_min === "number" ||
-    typeof filters.area_max === "number" ||
-    typeof filters.bedrooms_min === "number" ||
-    typeof filters.bathrooms_min === "number" ||
-    typeof filters.rooms_min === "number" ||
-    filters.sort !== defaultFilters.sort ||
-    filters.in_view
+    normalized.goal !== defaultFilters.goal ||
+    normalized.rent_frequency.length > 0 ||
+    normalized.property_type.length > 0 ||
+    normalized.listing_type !== defaultFilters.listing_type ||
+    normalized.region.length > 0 ||
+    normalized.city.length > 0 ||
+    normalized.district.length > 0 ||
+    typeof normalized.price_min === "number" ||
+    typeof normalized.price_max === "number" ||
+    typeof normalized.area_min === "number" ||
+    typeof normalized.area_max === "number" ||
+    typeof normalized.bedrooms_min === "number" ||
+    typeof normalized.bathrooms_min === "number" ||
+    typeof normalized.rooms_min === "number" ||
+    normalized.sort !== defaultFilters.sort ||
+    normalized.in_view
   );
 }
 
 export function withResetPage(filters: ListingFilters): ListingFilters {
-  return {
+  return normalizeFilters({
     ...filters,
     page: 1
-  };
+  });
 }
 
 export function goalLabel(goal: ListingGoal): string {
