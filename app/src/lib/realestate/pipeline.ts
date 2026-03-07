@@ -429,11 +429,15 @@ const histogram = (values: number[], bins: number): HistogramDatum[] => {
 
 export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
   const totalListings = listings.length;
-  const prices = listings.map((item) => item.price).filter((value) => Number.isFinite(value));
-  const areas = listings.map((item) => item.area).filter((value) => Number.isFinite(value));
+  const prices = listings
+    .map((item) => item.price)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const areas = listings
+    .map((item) => item.area)
+    .filter((value) => Number.isFinite(value) && value > 0);
   const pricesPerM2 = listings
     .map((item) => item.price_per_m2)
-    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
 
   const saleCount = listings.filter((item) => item.goal === "sale").length;
   const rentCount = listings.filter((item) => item.goal === "rent").length;
@@ -451,7 +455,7 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
   const districtAgg: Record<string, { total: number; count: number }> = {};
 
   for (const item of listings) {
-    if (typeof item.price_per_m2 !== "number") {
+    if (typeof item.price_per_m2 !== "number" || item.price_per_m2 <= 0) {
       continue;
     }
 
@@ -485,7 +489,7 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
     bucket.latTotal += item.latitude;
     bucket.lngTotal += item.longitude;
 
-    if (typeof item.price_per_m2 === "number") {
+    if (typeof item.price_per_m2 === "number" && item.price_per_m2 > 0) {
       bucket.pricePerM2Total += item.price_per_m2;
       bucket.pricePerM2Count += 1;
     }
@@ -526,13 +530,15 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
       .slice(0, 12),
     priceHistogram: histogram(prices, 8),
     areaHistogram: histogram(areas, 8),
-    scatter: listings.map((item) => ({
-      id: item.id,
-      source: item.source,
-      area: item.area,
-      price: item.price,
-      price_per_m2: item.price_per_m2
-    })),
+    scatter: listings
+      .filter((item) => item.price > 0 && item.area > 0)
+      .map((item) => ({
+        id: item.id,
+        source: item.source,
+        area: item.area,
+        price: item.price,
+        price_per_m2: item.price_per_m2
+      })),
     cityGeo: Object.entries(cityGeoAgg)
       .map(([cityCode, bucket]) => ({
         cityCode,
@@ -580,9 +586,11 @@ export function buildGeoRankingRows(listings: Listing[], level: GeoRankingLevel)
     };
 
     bucket.count += 1;
-    bucket.prices.push(listing.price);
+    if (listing.price > 0) {
+      bucket.prices.push(listing.price);
+    }
 
-    if (typeof listing.price_per_m2 === "number" && Number.isFinite(listing.price_per_m2)) {
+    if (typeof listing.price_per_m2 === "number" && Number.isFinite(listing.price_per_m2) && listing.price_per_m2 > 0) {
       bucket.pricesPerM2.push(listing.price_per_m2);
     }
 

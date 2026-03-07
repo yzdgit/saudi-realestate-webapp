@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { getMockListings } from "./mock-repository";
+import type { Listing } from "./types";
 import {
   applyListingFilters,
   buildGeoRankingRows,
@@ -84,6 +85,37 @@ describe("realestate pipeline", () => {
     expect(snapshot.cityGeo.length).toBeGreaterThan(0);
   });
 
+  it("treats zero numeric values as missing in analytics calculations", () => {
+    const [base] = getMockListings();
+
+    const listings: Listing[] = [
+      {
+        ...base,
+        id: `${base.id}-zero`,
+        city_code: "3",
+        district_code: "10100003075",
+        price: 0,
+        price_per_m2: 0
+      },
+      {
+        ...base,
+        id: `${base.id}-positive`,
+        city_code: "3",
+        district_code: "10100003075",
+        price: 1000000,
+        price_per_m2: 5000
+      }
+    ];
+
+    const snapshot = buildAnalyticsSnapshot(listings);
+
+    expect(snapshot.meanPrice).toBe(1000000);
+    expect(snapshot.medianPrice).toBe(1000000);
+    expect(snapshot.meanPricePerM2).toBe(5000);
+    expect(snapshot.medianPricePerM2).toBe(5000);
+    expect(snapshot.scatter.length).toBe(1);
+  });
+
   it("chooses geo drill level based on selected geography", () => {
     expect(getGeoDrillLevel({ region: [], city: [] })).toBe("region");
     expect(getGeoDrillLevel({ region: ["1"], city: [] })).toBe("city");
@@ -97,5 +129,33 @@ describe("realestate pipeline", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]?.level).toBe("region");
     expect(rows[0]?.count).toBeGreaterThan(0);
+  });
+
+  it("treats zero values as missing in geo rankings", () => {
+    const [base] = getMockListings();
+    const listings: Listing[] = [
+      {
+        ...base,
+        id: `${base.id}-rank-zero`,
+        city_code: "3",
+        district_code: "10100003075",
+        price: 0,
+        price_per_m2: 0
+      },
+      {
+        ...base,
+        id: `${base.id}-rank-positive`,
+        city_code: "3",
+        district_code: "10100003075",
+        price: 2000000,
+        price_per_m2: 7000
+      }
+    ];
+
+    const rows = buildGeoRankingRows(listings, "city");
+    expect(rows[0]?.meanPrice).toBe(2000000);
+    expect(rows[0]?.medianPrice).toBe(2000000);
+    expect(rows[0]?.meanPricePerM2).toBe(7000);
+    expect(rows[0]?.medianPricePerM2).toBe(7000);
   });
 });

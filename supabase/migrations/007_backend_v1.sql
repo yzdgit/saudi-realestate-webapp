@@ -371,18 +371,18 @@ with filtered as materialized (
 metrics as (
   select
     count(*)::integer as total_listings,
-    coalesce(percentile_cont(0.5) within group (order by price), 0)::numeric as median_price,
-    coalesce(avg(price), 0)::numeric as mean_price,
-    coalesce(min(price), 0)::numeric as min_price,
-    coalesce(max(price), 0)::numeric as max_price,
-    coalesce(percentile_cont(0.5) within group (order by price_per_m2), 0)::numeric as median_price_per_m2,
-    coalesce(avg(price_per_m2), 0)::numeric as mean_price_per_m2,
-    coalesce(min(price_per_m2), 0)::numeric as min_price_per_m2,
-    coalesce(max(price_per_m2), 0)::numeric as max_price_per_m2,
-    coalesce(percentile_cont(0.5) within group (order by area_m2), 0)::numeric as median_area,
-    coalesce(avg(area_m2), 0)::numeric as mean_area,
-    coalesce(min(area_m2), 0)::numeric as min_area,
-    coalesce(max(area_m2), 0)::numeric as max_area,
+    coalesce(percentile_cont(0.5) within group (order by nullif(price, 0)), 0)::numeric as median_price,
+    coalesce(avg(nullif(price, 0)), 0)::numeric as mean_price,
+    coalesce(min(nullif(price, 0)), 0)::numeric as min_price,
+    coalesce(max(nullif(price, 0)), 0)::numeric as max_price,
+    coalesce(percentile_cont(0.5) within group (order by nullif(price_per_m2, 0)), 0)::numeric as median_price_per_m2,
+    coalesce(avg(nullif(price_per_m2, 0)), 0)::numeric as mean_price_per_m2,
+    coalesce(min(nullif(price_per_m2, 0)), 0)::numeric as min_price_per_m2,
+    coalesce(max(nullif(price_per_m2, 0)), 0)::numeric as max_price_per_m2,
+    coalesce(percentile_cont(0.5) within group (order by nullif(area_m2, 0)), 0)::numeric as median_area,
+    coalesce(avg(nullif(area_m2, 0)), 0)::numeric as mean_area,
+    coalesce(min(nullif(area_m2, 0)), 0)::numeric as min_area,
+    coalesce(max(nullif(area_m2, 0)), 0)::numeric as max_area,
     coalesce((count(*) filter (where goal = 'rent'))::numeric / nullif(count(*)::numeric, 0), 0) as rent_share,
     coalesce((count(*) filter (where goal = 'sale'))::numeric / nullif(count(*)::numeric, 0), 0) as sale_share
   from filtered
@@ -454,7 +454,7 @@ district_avg as (
       district_code,
       avg(price_per_m2)::numeric as value
     from filtered
-    where price_per_m2 is not null
+    where price_per_m2 > 0
     group by district_code
     order by value desc
     limit 12
@@ -463,12 +463,12 @@ district_avg as (
 price_span as (
   select min(price)::numeric as min_price, max(price)::numeric as max_price
   from filtered
-  where price is not null
+  where price > 0
 ),
 area_span as (
   select min(area_m2)::numeric as min_area, max(area_m2)::numeric as max_area
   from filtered
-  where area_m2 is not null
+  where area_m2 > 0
 ),
 price_histogram as (
   select case
@@ -476,7 +476,7 @@ price_histogram as (
     when ps.min_price = ps.max_price then jsonb_build_array(
       jsonb_build_object(
         'range', round(ps.min_price)::text,
-        'count', (select count(*)::integer from filtered where price is not null)
+        'count', (select count(*)::integer from filtered where price > 0)
       )
     )
     else (
@@ -501,7 +501,7 @@ price_histogram as (
           least(8, greatest(1, width_bucket(f.price, ps.min_price, ps.max_price, 8)))::integer as bucket,
           count(*)::integer as bucket_count
         from filtered as f
-        where f.price is not null
+        where f.price > 0
         group by 1
       ) as b
     )
@@ -514,7 +514,7 @@ area_histogram as (
     when aspan.min_area = aspan.max_area then jsonb_build_array(
       jsonb_build_object(
         'range', round(aspan.min_area)::text,
-        'count', (select count(*)::integer from filtered where area_m2 is not null)
+        'count', (select count(*)::integer from filtered where area_m2 > 0)
       )
     )
     else (
@@ -539,7 +539,7 @@ area_histogram as (
           least(8, greatest(1, width_bucket(f.area_m2, aspan.min_area, aspan.max_area, 8)))::integer as bucket,
           count(*)::integer as bucket_count
         from filtered as f
-        where f.area_m2 is not null
+        where f.area_m2 > 0
         group by 1
       ) as b
     )
@@ -569,6 +569,7 @@ scatter_sample as (
       price_per_m2,
       md5(id::text) as sample_key
     from filtered
+    where price > 0 and area_m2 > 0
     order by sample_key
     limit 2000
   ) sampled
@@ -591,7 +592,7 @@ city_geo as (
     select
       city_code,
       count(*)::integer as total,
-      coalesce(avg(price_per_m2), 0)::numeric as avg_price_per_m2,
+      coalesce(avg(nullif(price_per_m2, 0)), 0)::numeric as avg_price_per_m2,
       avg(latitude)::double precision as avg_latitude,
       avg(longitude)::double precision as avg_longitude
     from filtered
@@ -658,10 +659,10 @@ grouped as (
       else null
     end as code,
     count(*)::integer as count,
-    coalesce(avg(price), 0)::numeric as mean_price,
-    coalesce(percentile_cont(0.5) within group (order by price), 0)::numeric as median_price,
-    coalesce(avg(price_per_m2), 0)::numeric as mean_price_per_m2,
-    coalesce(percentile_cont(0.5) within group (order by price_per_m2), 0)::numeric as median_price_per_m2,
+    coalesce(avg(nullif(price, 0)), 0)::numeric as mean_price,
+    coalesce(percentile_cont(0.5) within group (order by nullif(price, 0)), 0)::numeric as median_price,
+    coalesce(avg(nullif(price_per_m2, 0)), 0)::numeric as mean_price_per_m2,
+    coalesce(percentile_cont(0.5) within group (order by nullif(price_per_m2, 0)), 0)::numeric as median_price_per_m2,
     coalesce((count(*) filter (where goal = 'rent'))::numeric / nullif(count(*)::numeric, 0), 0) as rent_share,
     coalesce((count(*) filter (where goal = 'sale'))::numeric / nullif(count(*)::numeric, 0), 0) as sale_share
   from filtered
@@ -788,10 +789,10 @@ grouped as (
       else null
     end as code,
     count(*)::integer as total_listings,
-    coalesce(avg(price), 0)::numeric as mean_price,
-    coalesce(percentile_cont(0.5) within group (order by price), 0)::numeric as median_price,
-    coalesce(avg(price_per_m2), 0)::numeric as mean_price_per_m2,
-    coalesce(percentile_cont(0.5) within group (order by price_per_m2), 0)::numeric as median_price_per_m2,
+    coalesce(avg(nullif(price, 0)), 0)::numeric as mean_price,
+    coalesce(percentile_cont(0.5) within group (order by nullif(price, 0)), 0)::numeric as median_price,
+    coalesce(avg(nullif(price_per_m2, 0)), 0)::numeric as mean_price_per_m2,
+    coalesce(percentile_cont(0.5) within group (order by nullif(price_per_m2, 0)), 0)::numeric as median_price_per_m2,
     coalesce((count(*) filter (where goal = 'rent'))::numeric / nullif(count(*)::numeric, 0), 0) as rent_share,
     coalesce((count(*) filter (where goal = 'sale'))::numeric / nullif(count(*)::numeric, 0), 0) as sale_share
   from filtered
@@ -962,10 +963,10 @@ begin
     src.goal,
     src.listing_type,
     count(*)::integer as total_listings,
-    coalesce(percentile_cont(0.5) within group (order by src.price), 0)::numeric as median_price,
-    coalesce(avg(src.price), 0)::numeric as mean_price,
-    coalesce(percentile_cont(0.5) within group (order by src.price_per_m2), 0)::numeric as median_price_per_m2,
-    coalesce(avg(src.price_per_m2), 0)::numeric as mean_price_per_m2
+    coalesce(percentile_cont(0.5) within group (order by nullif(src.price, 0)), 0)::numeric as median_price,
+    coalesce(avg(nullif(src.price, 0)), 0)::numeric as mean_price,
+    coalesce(percentile_cont(0.5) within group (order by nullif(src.price_per_m2, 0)), 0)::numeric as median_price_per_m2,
+    coalesce(avg(nullif(src.price_per_m2, 0)), 0)::numeric as mean_price_per_m2
   from (
     select 'region'::text as level, region_code as code, goal, listing_type, price, price_per_m2
     from public.listings

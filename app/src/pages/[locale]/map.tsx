@@ -6,8 +6,6 @@ import { useRouter } from "next/router";
 import { AdPlaceholder } from "@/components/ads/ad-placeholder";
 import { ExplorerShell } from "@/components/layout/explorer-shell";
 import { StatsRow } from "@/components/layout/stats-row";
-import { Card, CardContent } from "@/components/ui/card";
-import { ActiveFilterChips } from "@/features/filters/active-filter-chips";
 import { FilterPanelDesktop, FilterPanelMobile } from "@/features/filters/filter-panel";
 import { useUrlFilters } from "@/features/filters/use-url-filters";
 import { ListingDetailsDrawer } from "@/features/listings/listing-details-drawer";
@@ -232,43 +230,34 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
             showInViewToggle
           />
         }
-        activeFilterChips={
-          <ActiveFilterChips
-            locale={locale}
-            messages={messages}
-            filters={filters}
-            onPatch={setFilters}
-            onReset={resetFilters}
-          />
-        }
         statsRow={<StatsRow locale={locale} messages={messages} snapshot={stats} />}
         hrefQuery={hrefQuery}
       >
         <AdPlaceholder variant="stats" />
-        {error ? (
-          <Card className="border-destructive/40 bg-card/80">
-            <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
-          </Card>
-        ) : null}
-        {isLoading && mapPoints.rows.length === 0 && stats.totalListings === 0 ? (
-          <Card className="border-border/70 bg-card/80">
-            <CardContent className="py-3 text-sm text-muted-foreground">Loading map data...</CardContent>
-          </Card>
-        ) : null}
-
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <ListingsMap
-            locale={locale}
-            messages={messages}
-            filters={filters}
-            listings={mapListings}
-            overlayMode={effectiveOverlayMode}
-            mode={mode}
-            areaStatsByLevel={areaStatsByLevel}
-            onPatchFilters={setFilters}
-            onSelectListing={openListingDetails}
-            onViewportChange={setBounds}
-          />
+          <div className="relative">
+            <ListingsMap
+              locale={locale}
+              messages={messages}
+              filters={filters}
+              listings={mapListings}
+              overlayMode={effectiveOverlayMode}
+              mode={mode}
+              areaStatsByLevel={areaStatsByLevel}
+              onPatchFilters={setFilters}
+              onSelectListing={openListingDetails}
+              onViewportChange={setBounds}
+            />
+            {error ? (
+              <div className="pointer-events-none absolute end-3 top-3 z-[1002] rounded-md border border-destructive/60 bg-background/90 px-2 py-1 text-[11px] text-destructive backdrop-blur">
+                {error}
+              </div>
+            ) : isLoading ? (
+              <div className="pointer-events-none absolute end-3 top-3 z-[1002] rounded-md border border-border/70 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
+                Updating map...
+              </div>
+            ) : null}
+          </div>
 
           <MapLegend
             messages={messages}

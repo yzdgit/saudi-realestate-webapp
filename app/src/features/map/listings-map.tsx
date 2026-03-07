@@ -182,10 +182,12 @@ function statsByCodeForLevel(level: MapLevel, listings: Listing[]): Map<string, 
   const result = new Map<string, AreaStats>();
 
   for (const [code, items] of grouped.entries()) {
-    const prices = items.map((item) => item.price).filter((value) => Number.isFinite(value));
+    const prices = items
+      .map((item) => item.price)
+      .filter((value) => Number.isFinite(value) && value > 0);
     const pricesPerM2 = items
       .map((item) => item.price_per_m2)
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
 
     result.set(code, {
       totalListings: items.length,
