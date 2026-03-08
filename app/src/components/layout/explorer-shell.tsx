@@ -160,12 +160,12 @@ export function ExplorerShell({
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed inset-x-0 top-0 z-[1100] border-b border-border/70 bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto grid max-w-[1600px] grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3 lg:px-6">
-          <div className="flex items-center justify-start">
-            {filterPanelMobile ? <div className="w-[154px] lg:hidden">{filterPanelMobile}</div> : null}
+        <div className="mx-auto grid max-w-[1600px] grid-cols-[auto_1fr_auto] items-center gap-2 px-4 py-3 lg:grid-cols-[1fr_auto_1fr] lg:px-6">
+          <div className="flex items-center justify-start lg:hidden">
+            {filterPanelMobile}
           </div>
 
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex min-w-0 flex-col items-center gap-2">
             <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground/95">
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-card text-foreground">
                 <Building2 className="h-4 w-4" />
