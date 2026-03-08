@@ -238,14 +238,45 @@ const toBoundsPayload = (bounds: MapBounds | undefined): AnyRecord | null => {
   };
 };
 
+const normalizeListingUri = (source: Listing["source"], uri: string): string => {
+  if (!uri) {
+    return uri;
+  }
+
+  try {
+    const parsed = new URL(uri);
+    const hostname = parsed.hostname.toLowerCase();
+    const isBayutHost = hostname === "bayut.sa" || hostname.endsWith(".bayut.sa");
+
+    if (source !== "bayut" || !isBayutHost) {
+      return uri;
+    }
+
+    const pathname = parsed.pathname;
+    const lastSegment = pathname.split("/").pop() ?? "";
+    const hasAnyExtension = lastSegment.includes(".");
+
+    if (pathname.endsWith("/") || pathname.toLowerCase().endsWith(".html") || hasAnyExtension) {
+      return uri;
+    }
+
+    parsed.pathname = `${pathname}.html`;
+    return parsed.toString();
+  } catch {
+    return uri;
+  }
+};
+
 const toListing = (row: AnyRecord): Listing => {
   const rentFrequencyRaw =
     typeof row.rent_frequency === "string" ? row.rent_frequency : undefined;
+  const source = String(row.source ?? "aqar") as Listing["source"];
+  const listingUri = normalizeListingUri(source, String(row.listing_uri ?? ""));
 
   return {
     id: String(row.id ?? ""),
-    source: String(row.source ?? "aqar") as Listing["source"],
-    listing_uri: String(row.listing_uri ?? ""),
+    source,
+    listing_uri: listingUri,
     goal: String(row.goal ?? "sale") as Listing["goal"],
     rent_frequency: rentFrequencyRaw as Listing["rent_frequency"],
     raw_rent_frequency: rentFrequencyRaw as Listing["raw_rent_frequency"],

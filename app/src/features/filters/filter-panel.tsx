@@ -503,9 +503,15 @@ export function FilterPanelMobile(props: FilterPanelProps) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 w-8 p-0"
+          aria-label={props.messages.filters.open_filters}
+          title={props.messages.filters.open_filters}
+        >
           <Filter className="h-4 w-4" />
-          {props.messages.filters.open_filters}
+          <span className="sr-only">{props.messages.filters.open_filters}</span>
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-[92vw] overflow-y-auto border-border/70 bg-background p-0">
