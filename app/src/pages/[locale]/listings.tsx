@@ -283,7 +283,7 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
           </>
         ) : (
           <>
-            <AdPlaceholder variant="stats" />
+            <AdPlaceholder variant="table" />
             {isLoading && stats.totalListings === 0 ? (
               <Card className="border-border/70 bg-card/80">
                 <CardContent className="py-4 text-sm text-muted-foreground">Loading analytics...</CardContent>
