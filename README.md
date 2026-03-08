@@ -60,16 +60,6 @@ It combines a fast listings workflow with region-level analytics, using one shar
 - Typed query mapping and normalized filter contracts
 - Locale-first routing with static generation for route shells
 
-## Cloudflare Pages Deployment
-
-This project is configured for static export.
-
-1. Set your production environment variables in Cloudflare Pages (see `.env.example` for required keys).
-2. Use:
-   - Build command: `bun run build`
-   - Output directory: `app/out`
-3. Deploy.
-
 ## Local Development
 
 ```bash
