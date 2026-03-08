@@ -3,6 +3,7 @@ import type { LocaleMessages } from "@/lib/messages";
 import { formatArea, formatNumber } from "@/lib/format";
 import { getCityLabel, getDistrictLabel } from "@/lib/location-codes";
 import type { Listing } from "@/lib/realestate/types";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyValue } from "@/components/ui/currency-value";
 import { PropertyTypeIcon } from "@/components/ui/property-type-icon";
@@ -55,7 +56,16 @@ export function ListingsTable({ locale, messages, listings, compareIds, onSelect
                   aria-label={messages.listings.compare}
                 />
               </TableCell>
-              <TableCell>{messages.goal[listing.goal]}</TableCell>
+              <TableCell>
+                <span className="inline-flex items-center gap-2">
+                  <span>{messages.goal[listing.goal]}</span>
+                  {listing.is_outlier ? (
+                    <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700">
+                      {messages.listings.outlier}
+                    </Badge>
+                  ) : null}
+                </span>
+              </TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-2">
                   <PropertyTypeIcon type={listing.property_type} className="text-muted-foreground" />

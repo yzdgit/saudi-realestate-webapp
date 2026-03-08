@@ -135,14 +135,6 @@ export function ActiveFilterChips({ locale, messages, filters, onPatch, onReset 
     });
   }
 
-  if (filters.in_view) {
-    chips.push({
-      id: "in_view",
-      label: messages.filters.in_view,
-      onRemove: () => onPatch({ in_view: false }, { resetPage: false })
-    });
-  }
-
   const hasSort = filters.sort !== defaultFilters.sort;
   if (hasSort) {
     chips.push({

@@ -123,6 +123,8 @@ const LEVEL_FILL_RANGE: Record<MapLevel, { min: number; max: number }> = {
   district: { min: 0.05, max: 0.5 }
 };
 
+const GEOJSON_CDN_BASE = "https://cdn.namla.sa/geojson";
+
 function sameBounds(left: MapBounds | undefined, right: MapBounds): boolean {
   if (!left) {
     return false;
@@ -1152,7 +1154,7 @@ export function ListingsMap({
     setLoadingRegion(true);
     setBoundaryError(null);
 
-    void fetchBoundaryCollection("/geojson/regions.geojson", controller.signal)
+    void fetchBoundaryCollection(`${GEOJSON_CDN_BASE}/regions.geojson`, controller.signal)
       .then((collection) => {
         if (!controller.signal.aborted) {
           setRegionsGeoJson(collection);
@@ -1183,7 +1185,7 @@ export function ListingsMap({
     setLoadingCity(true);
     setBoundaryError(null);
 
-    void fetchBoundaryCollection("/geojson/cities_polygons.geojson", controller.signal)
+    void fetchBoundaryCollection(`${GEOJSON_CDN_BASE}/cities_polygons.geojson`, controller.signal)
       .then((collection) => {
         if (!controller.signal.aborted) {
           setCitiesGeoJson(collection);
@@ -1216,7 +1218,7 @@ export function ListingsMap({
     setLoadingDistrict(true);
     setBoundaryError(null);
 
-    void fetchBoundaryCollection("/geojson/districts.geojson", controller.signal)
+    void fetchBoundaryCollection(`${GEOJSON_CDN_BASE}/districts.geojson`, controller.signal)
       .then((collection) => {
         if (!controller.signal.aborted) {
           setDistrictsGeoJson(collection);

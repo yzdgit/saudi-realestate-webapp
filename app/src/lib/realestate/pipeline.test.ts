@@ -119,6 +119,115 @@ describe("realestate pipeline", () => {
     expect(snapshot.scatter.length).toBe(1);
   });
 
+  it("applies fixed hard-validity thresholds before analytics metrics", () => {
+    const [base] = getMockListings();
+    const validArea = 200;
+
+    const listings: Listing[] = [
+      {
+        ...base,
+        id: `${base.id}-hard-invalid`,
+        city_code: "3",
+        district_code: "10100003075",
+        price: 4000,
+        area: 100,
+        price_per_m2: 40
+      },
+      {
+        ...base,
+        id: `${base.id}-hard-valid`,
+        city_code: "3",
+        district_code: "10100003075",
+        price: 1000000,
+        area: validArea,
+        price_per_m2: 1000000 / validArea
+      }
+    ];
+
+    const snapshot = buildAnalyticsSnapshot(listings);
+
+    expect(snapshot.totalListings).toBe(2);
+    expect(snapshot.meanPrice).toBe(1000000);
+    expect(snapshot.medianPrice).toBe(1000000);
+    expect(snapshot.scatter.length).toBe(1);
+  });
+
+  it("uses MAD + winsorization to prevent extreme outliers from distorting charts", () => {
+    const [base] = getMockListings();
+    const normalListings: Listing[] = Array.from({ length: 20 }, (_, index) => {
+      const area = 200;
+      const price = 1000000 + index * 10000;
+
+      return {
+        ...base,
+        id: `${base.id}-normal-${index}`,
+        city_code: "3",
+        district_code: "10100003075",
+        price,
+        area,
+        price_per_m2: price / area
+      };
+    });
+
+    const extreme: Listing = {
+      ...base,
+      id: `${base.id}-extreme`,
+      city_code: "3",
+      district_code: "10100003075",
+      price: 100000000,
+      area: 500,
+      price_per_m2: 200000
+    };
+
+    const listings = [...normalListings, extreme];
+    const snapshot = buildAnalyticsSnapshot(listings);
+    const rankings = buildGeoRankingRows(listings, "city");
+
+    expect(snapshot.totalListings).toBe(21);
+    expect(snapshot.maxPrice).toBeLessThan(2000000);
+    expect(snapshot.scatter.length).toBeLessThan(21);
+    expect(snapshot.scatter.length).toBeGreaterThanOrEqual(18);
+    expect(rankings[0]?.count).toBe(21);
+    expect(rankings[0]?.meanPrice).toBeLessThan(2000000);
+  });
+
+  it("detects outliers separately for sale and rent cohorts", () => {
+    const [base] = getMockListings();
+
+    const saleListings: Listing[] = Array.from({ length: 100 }, (_, index) => {
+      const area = 200;
+      const price = 900000 + index * 1000;
+      return {
+        ...base,
+        id: `${base.id}-sale-${index}`,
+        goal: "sale",
+        city_code: "3",
+        district_code: "10100003075",
+        area,
+        price,
+        price_per_m2: price / area
+      };
+    });
+
+    const rentListing: Listing = {
+      ...base,
+      id: `${base.id}-rent-normal`,
+      goal: "rent",
+      city_code: "3",
+      district_code: "10100003075",
+      area: 100,
+      price: 60000,
+      price_per_m2: 600
+    };
+
+    const snapshot = buildAnalyticsSnapshot([...saleListings, rentListing]);
+
+    expect(snapshot.totalListings).toBe(101);
+    expect(snapshot.minPrice).toBe(60000);
+    expect(snapshot.meanPrice).toBeLessThan(949500);
+    expect(snapshot.meanPrice).toBeGreaterThan(60000);
+  });
+
   it("chooses geo drill level based on selected geography", () => {
     expect(getGeoDrillLevel({ region: [], city: [] })).toBe("region");
     expect(getGeoDrillLevel({ region: ["1"], city: [] })).toBe("city");

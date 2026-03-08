@@ -18,6 +18,7 @@ import {
   fetchMapAreaStatsDailyBundle,
   stripNumericFilterValues
 } from "@/lib/queries/realestate";
+import { isAbortLikeError } from "@/lib/queries/cache";
 import { HARDCODED_FILTER_OPTIONS } from "@/lib/realestate/hardcoded-filter-options";
 import type { Listing, MapAreaStat, MapLevel } from "@/lib/realestate/types";
 import { useLocaleDocument } from "@/lib/use-locale-document";
@@ -40,7 +41,6 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
   const router = useRouter();
   const messages = getMessages(locale);
   const { mode, setMode, filters, setFilters, resetFilters, hrefQuery } = useUrlFilters(locale);
-  const mapInViewDefaultAppliedRef = useRef(false);
   const statsRequestRef = useRef(0);
   const mapMode: ExplorerMode = "analyze";
 
@@ -49,7 +49,6 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
     useState<Partial<Record<MapLevel, MapAreaStat[]>>>(EMPTY_MAP_AREA_STATS_BUNDLE);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const isAbortError = (error: unknown) => error instanceof Error && error.name === "AbortError";
   const effectiveOverlayMode: MapOverlayMode = "intensity";
   const mapListings = useMemo(() => [] as Listing[], []);
   const mapFilters = useMemo(
@@ -70,6 +69,10 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
   const isLoading = isLoadingStats;
 
   useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
     const controller = new AbortController();
     const requestId = statsRequestRef.current + 1;
     statsRequestRef.current = requestId;
@@ -97,7 +100,7 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
           return;
         }
 
-        if (isAbortError(nextError)) {
+        if (isAbortLikeError(nextError)) {
           return;
         }
 
@@ -113,7 +116,7 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
     return () => {
       controller.abort();
     };
-  }, [mapStatsFilters]);
+  }, [mapStatsFilters, router.isReady]);
 
   useEffect(() => {
     if (!router.isReady || mode === "analyze") {
@@ -124,17 +127,12 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
   }, [mode, router.isReady, setMode]);
 
   useEffect(() => {
-    if (!router.isReady || mapInViewDefaultAppliedRef.current) {
+    if (!router.isReady || !filters.in_view) {
       return;
     }
 
-    mapInViewDefaultAppliedRef.current = true;
-    const hasInViewParam = typeof router.query.in_view !== "undefined";
-
-    if (!hasInViewParam) {
-      setFilters({ in_view: true }, { resetPage: false });
-    }
-  }, [router.isReady, router.query.in_view, setFilters]);
+    setFilters({ in_view: false }, { resetPage: false });
+  }, [filters.in_view, router.isReady, setFilters]);
 
   return (
     <>
@@ -162,7 +160,6 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
             options={HARDCODED_FILTER_OPTIONS}
             onPatch={setFilters}
             onReset={resetFilters}
-            showInViewToggle
             disableNumericFilters
           />
         }
@@ -174,7 +171,6 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
             options={HARDCODED_FILTER_OPTIONS}
             onPatch={setFilters}
             onReset={resetFilters}
-            showInViewToggle
             disableNumericFilters
           />
         }

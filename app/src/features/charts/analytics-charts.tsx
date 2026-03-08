@@ -33,6 +33,7 @@ export function AnalyticsCharts({
   snapshot,
   onCityClick
 }: Props) {
+  const isArabic = locale === "ar";
   const cityDistribution = snapshot.cityDistribution.map((item) => ({
     ...item,
     cityCode: item.key,
@@ -43,6 +44,10 @@ export function AnalyticsCharts({
     ...item,
     districtLabel: getDistrictLabel(item.districtCode, locale)
   }));
+  const horizontalBarMargin = isArabic ? { right: 20, left: 8 } : { left: 20, right: 8 };
+  const cityAxisWidth = isArabic ? 140 : 100;
+  const districtAxisWidth = isArabic ? 180 : 140;
+  const categoryAxisOrientation = isArabic ? "right" : "left";
 
   return (
     <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
@@ -52,10 +57,18 @@ export function AnalyticsCharts({
         </CardHeader>
         <CardContent>
           <ChartContainer config={{ count: { label: messages.common.count, color: "#22d3ee" } }} className="h-[320px] w-full">
-            <BarChart data={cityDistribution} layout="vertical" margin={{ left: 20 }}>
+            <BarChart data={cityDistribution} layout="vertical" margin={horizontalBarMargin}>
               <CartesianGrid horizontal={false} />
               <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="cityLabel" width={100} tickLine={false} axisLine={false} />
+              <YAxis
+                type="category"
+                dataKey="cityLabel"
+                width={cityAxisWidth}
+                orientation={categoryAxisOrientation}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+              />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Bar dataKey="value" fill="#22d3ee" radius={6} onClick={(item) => onCityClick(item.cityCode)} />
             </BarChart>
@@ -69,10 +82,18 @@ export function AnalyticsCharts({
         </CardHeader>
         <CardContent>
           <ChartContainer config={{ value: { label: messages.listings.price_per_m2, color: "#a3e635" } }} className="h-[320px] w-full">
-            <BarChart data={districtAvgPricePerM2} layout="vertical" margin={{ left: 20 }}>
+            <BarChart data={districtAvgPricePerM2} layout="vertical" margin={horizontalBarMargin}>
               <CartesianGrid horizontal={false} />
               <XAxis type="number" tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="districtLabel" width={140} tickLine={false} axisLine={false} />
+              <YAxis
+                type="category"
+                dataKey="districtLabel"
+                width={districtAxisWidth}
+                orientation={categoryAxisOrientation}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+              />
               <ChartTooltip
                 content={
                   <ChartTooltipContent

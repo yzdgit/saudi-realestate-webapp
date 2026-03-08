@@ -22,8 +22,36 @@ const DEFAULT_MAX_ENTRIES = 220;
 
 const queryCache = new Map<string, CacheEntry<unknown>>();
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
+const ABORT_MESSAGE_PATTERNS = [
+  "aborterror",
+  "signal is aborted",
+  "aborted without reason",
+  "the user aborted a request"
+];
+
+export function isAbortLikeError(error: unknown): boolean {
+  if (error instanceof Error) {
+    if (error.name === "AbortError") {
+      return true;
+    }
+
+    const normalized = error.message.trim().toLowerCase();
+    if (ABORT_MESSAGE_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+      return true;
+    }
+  }
+
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") {
+      const normalized = message.trim().toLowerCase();
+      if (ABORT_MESSAGE_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function touchCache(maxEntries: number): void {
@@ -102,7 +130,7 @@ export async function runCachedQuery<T>({
     }
 
     return entry.inflight.catch((error) => {
-      if (!retryOnInflightAbort || !isAbortError(error)) {
+      if (!retryOnInflightAbort || !isAbortLikeError(error)) {
         throw error;
       }
 
@@ -148,7 +176,7 @@ export async function runCachedQuery<T>({
       return value;
     })
     .catch((error) => {
-      if (staleOnError && typeof entry.value !== "undefined" && !isAbortError(error)) {
+      if (staleOnError && typeof entry.value !== "undefined" && !isAbortLikeError(error)) {
         return entry.value;
       }
 

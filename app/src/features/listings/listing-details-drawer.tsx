@@ -47,6 +47,11 @@ export function ListingDetailsDrawer({ locale, messages, listing, open, onOpenCh
                   <PropertyTypeIcon type={listing.property_type} className="h-3.5 w-3.5" />
                   <span>{messages.property_type[listing.property_type]}</span>
                 </Badge>
+                {listing.is_outlier ? (
+                  <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700">
+                    {messages.listings.outlier}
+                  </Badge>
+                ) : null}
               </div>
 
               <div>

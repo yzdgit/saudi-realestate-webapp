@@ -29,7 +29,7 @@ const sortValues = [
   "bedrooms_desc"
 ] as const;
 
-export const DEFAULT_PAGE_SIZE = 12;
+export const DEFAULT_PAGE_SIZE = 10;
 
 export const defaultFilters: ListingFilters = {
   goal: "sale",
@@ -384,6 +384,221 @@ const max = (values: number[]): number => {
   return Math.max(...values);
 };
 
+const OUTLIER_MIN_PRICE = 5000;
+const OUTLIER_MIN_AREA_M2 = 20;
+const OUTLIER_MAX_AREA_M2 = 50000;
+const OUTLIER_MIN_PRICE_PER_M2 = 400;
+const OUTLIER_MAX_PRICE_PER_M2 = 200000;
+const OUTLIER_PERCENTILE_LOW = 0.01;
+const OUTLIER_PERCENTILE_HIGH = 0.99;
+const OUTLIER_MAD_Z_THRESHOLD = 3.5;
+const ROBUST_Z_SCALE = 0.6745;
+
+type OutlierAssessment = {
+  isOutlier: boolean;
+  isHardInvalid: boolean;
+  isMadOutlier: boolean;
+  isPercentileOutlier: boolean;
+  priceClean: number | null;
+  areaClean: number | null;
+  pricePerM2Clean: number | null;
+};
+
+type OutlierProfile = {
+  byId: Map<string, OutlierAssessment>;
+};
+
+type GoalOutlierStats = {
+  priceP01?: number;
+  priceP99?: number;
+  areaP01?: number;
+  areaP99?: number;
+  ppm2P01?: number;
+  ppm2P99?: number;
+  priceMedian?: number;
+  areaMedian?: number;
+  ppm2Median?: number;
+  priceMad?: number;
+  areaMad?: number;
+  ppm2Mad?: number;
+};
+
+const isHardValidListing = (listing: Listing): boolean => {
+  const ppm2 = listing.price_per_m2;
+
+  return (
+    listing.price > OUTLIER_MIN_PRICE &&
+    listing.area >= OUTLIER_MIN_AREA_M2 &&
+    listing.area <= OUTLIER_MAX_AREA_M2 &&
+    typeof ppm2 === "number" &&
+    Number.isFinite(ppm2) &&
+    ppm2 >= OUTLIER_MIN_PRICE_PER_M2 &&
+    ppm2 <= OUTLIER_MAX_PRICE_PER_M2
+  );
+};
+
+const quantile = (values: number[], percentile: number): number | undefined => {
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = (sorted.length - 1) * percentile;
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+
+  if (lowerIndex === upperIndex) {
+    return sorted[lowerIndex];
+  }
+
+  const weight = index - lowerIndex;
+  return sorted[lowerIndex] * (1 - weight) + sorted[upperIndex] * weight;
+};
+
+const clampWithBounds = (
+  value: number,
+  minBound: number | undefined,
+  maxBound: number | undefined
+): number => {
+  let next = value;
+
+  if (typeof minBound === "number") {
+    next = Math.max(next, minBound);
+  }
+
+  if (typeof maxBound === "number") {
+    next = Math.min(next, maxBound);
+  }
+
+  return next;
+};
+
+const medianAbsoluteDeviation = (values: number[], medianValue: number): number | undefined => {
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  const absoluteDeviations = values.map((value) => Math.abs(value - medianValue));
+  const deviationMedian = median(absoluteDeviations);
+
+  return Number.isFinite(deviationMedian) ? deviationMedian : undefined;
+};
+
+const isMadOutlierValue = (
+  value: number,
+  medianValue: number | undefined,
+  madValue: number | undefined
+): boolean => {
+  if (
+    typeof medianValue !== "number" ||
+    typeof madValue !== "number" ||
+    !Number.isFinite(medianValue) ||
+    !Number.isFinite(madValue) ||
+    madValue <= 0
+  ) {
+    return false;
+  }
+
+  const robustZ = Math.abs((ROBUST_Z_SCALE * (value - medianValue)) / madValue);
+  return Number.isFinite(robustZ) && robustZ > OUTLIER_MAD_Z_THRESHOLD;
+};
+
+const buildGoalOutlierStats = (goalListings: Listing[]): GoalOutlierStats => {
+  const priceValues = goalListings.map((item) => item.price);
+  const areaValues = goalListings.map((item) => item.area);
+  const ppm2Values = goalListings
+    .map((item) => item.price_per_m2)
+    .filter((value): value is number => typeof value === "number");
+
+  const priceMedian = quantile(priceValues, 0.5);
+  const areaMedian = quantile(areaValues, 0.5);
+  const ppm2Median = quantile(ppm2Values, 0.5);
+
+  return {
+    priceP01: quantile(priceValues, OUTLIER_PERCENTILE_LOW),
+    priceP99: quantile(priceValues, OUTLIER_PERCENTILE_HIGH),
+    areaP01: quantile(areaValues, OUTLIER_PERCENTILE_LOW),
+    areaP99: quantile(areaValues, OUTLIER_PERCENTILE_HIGH),
+    ppm2P01: quantile(ppm2Values, OUTLIER_PERCENTILE_LOW),
+    ppm2P99: quantile(ppm2Values, OUTLIER_PERCENTILE_HIGH),
+    priceMedian,
+    areaMedian,
+    ppm2Median,
+    priceMad: typeof priceMedian === "number" ? medianAbsoluteDeviation(priceValues, priceMedian) : undefined,
+    areaMad: typeof areaMedian === "number" ? medianAbsoluteDeviation(areaValues, areaMedian) : undefined,
+    ppm2Mad: typeof ppm2Median === "number" ? medianAbsoluteDeviation(ppm2Values, ppm2Median) : undefined
+  };
+};
+
+const buildOutlierProfile = (listings: Listing[]): OutlierProfile => {
+  const hardValidByGoal: Record<ListingGoal, Listing[]> = {
+    sale: [],
+    rent: []
+  };
+
+  for (const listing of listings) {
+    if (!isHardValidListing(listing)) {
+      continue;
+    }
+
+    hardValidByGoal[listing.goal].push(listing);
+  }
+
+  const goalStats: Record<ListingGoal, GoalOutlierStats> = {
+    sale: buildGoalOutlierStats(hardValidByGoal.sale),
+    rent: buildGoalOutlierStats(hardValidByGoal.rent)
+  };
+
+  const byId = new Map<string, OutlierAssessment>();
+
+  for (const listing of listings) {
+    const isHardInvalid = !isHardValidListing(listing);
+    const ppm2 = typeof listing.price_per_m2 === "number" ? listing.price_per_m2 : 0;
+    const stats = goalStats[listing.goal];
+
+    const pricePercentileOutlier =
+      !isHardInvalid &&
+      typeof stats.priceP01 === "number" &&
+      typeof stats.priceP99 === "number" &&
+      (listing.price < stats.priceP01 || listing.price > stats.priceP99);
+
+    const areaPercentileOutlier =
+      !isHardInvalid &&
+      typeof stats.areaP01 === "number" &&
+      typeof stats.areaP99 === "number" &&
+      (listing.area < stats.areaP01 || listing.area > stats.areaP99);
+
+    const ppm2PercentileOutlier =
+      !isHardInvalid &&
+      typeof stats.ppm2P01 === "number" &&
+      typeof stats.ppm2P99 === "number" &&
+      (ppm2 < stats.ppm2P01 || ppm2 > stats.ppm2P99);
+
+    const madOutlier =
+      !isHardInvalid &&
+      (
+        isMadOutlierValue(listing.price, stats.priceMedian, stats.priceMad) ||
+        isMadOutlierValue(listing.area, stats.areaMedian, stats.areaMad) ||
+        isMadOutlierValue(ppm2, stats.ppm2Median, stats.ppm2Mad)
+      );
+
+    const isPercentileOutlier = pricePercentileOutlier || areaPercentileOutlier || ppm2PercentileOutlier;
+    const isOutlier = isHardInvalid || isPercentileOutlier || madOutlier;
+
+    byId.set(listing.id, {
+      isOutlier,
+      isHardInvalid,
+      isMadOutlier: madOutlier,
+      isPercentileOutlier,
+      priceClean: isHardInvalid ? null : clampWithBounds(listing.price, stats.priceP01, stats.priceP99),
+      areaClean: isHardInvalid ? null : clampWithBounds(listing.area, stats.areaP01, stats.areaP99),
+      pricePerM2Clean: isHardInvalid ? null : clampWithBounds(ppm2, stats.ppm2P01, stats.ppm2P99)
+    });
+  }
+
+  return { byId };
+};
+
 const histogram = (values: number[], bins: number): HistogramDatum[] => {
   if (values.length === 0) {
     return [];
@@ -416,25 +631,29 @@ const histogram = (values: number[], bins: number): HistogramDatum[] => {
 };
 
 export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
+  const outlierProfile = buildOutlierProfile(listings);
+  const cleanListings = listings.filter((item) => !outlierProfile.byId.get(item.id)?.isOutlier);
   const totalListings = listings.length;
-  const prices = listings
-    .map((item) => item.price)
+  const prices = cleanListings
+    .map((item) => outlierProfile.byId.get(item.id)?.priceClean)
+    .filter((value): value is number => typeof value === "number")
     .filter((value) => Number.isFinite(value) && value > 0);
-  const areas = listings
-    .map((item) => item.area)
+  const areas = cleanListings
+    .map((item) => outlierProfile.byId.get(item.id)?.areaClean)
+    .filter((value): value is number => typeof value === "number")
     .filter((value) => Number.isFinite(value) && value > 0);
-  const pricesPerM2 = listings
-    .map((item) => item.price_per_m2)
+  const pricesPerM2 = cleanListings
+    .map((item) => outlierProfile.byId.get(item.id)?.pricePerM2Clean)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
 
-  const saleCount = listings.filter((item) => item.goal === "sale").length;
-  const rentCount = listings.filter((item) => item.goal === "rent").length;
+  const saleCount = cleanListings.filter((item) => item.goal === "sale").length;
+  const rentCount = cleanListings.filter((item) => item.goal === "rent").length;
 
-  const cityCounts = countBy(listings, (item) => item.city_code);
+  const cityCounts = countBy(cleanListings, (item) => item.city_code);
 
   const propertyMix: Record<string, { sale: number; rent: number }> = {};
 
-  for (const item of listings) {
+  for (const item of cleanListings) {
     const bucket = propertyMix[item.property_type] ?? { sale: 0, rent: 0 };
     bucket[item.goal] += 1;
     propertyMix[item.property_type] = bucket;
@@ -442,13 +661,14 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
 
   const districtAgg: Record<string, { total: number; count: number }> = {};
 
-  for (const item of listings) {
-    if (typeof item.price_per_m2 !== "number" || item.price_per_m2 <= 0) {
+  for (const item of cleanListings) {
+    const pricePerM2 = outlierProfile.byId.get(item.id)?.pricePerM2Clean;
+    if (typeof pricePerM2 !== "number" || pricePerM2 <= 0) {
       continue;
     }
 
     const bucket = districtAgg[item.district_code] ?? { total: 0, count: 0 };
-    bucket.total += item.price_per_m2;
+    bucket.total += pricePerM2;
     bucket.count += 1;
     districtAgg[item.district_code] = bucket;
   }
@@ -464,7 +684,7 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
     }
   > = {};
 
-  for (const item of listings) {
+  for (const item of cleanListings) {
     const bucket = cityGeoAgg[item.city_code] ?? {
       count: 0,
       latTotal: 0,
@@ -477,8 +697,9 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
     bucket.latTotal += item.latitude;
     bucket.lngTotal += item.longitude;
 
-    if (typeof item.price_per_m2 === "number" && item.price_per_m2 > 0) {
-      bucket.pricePerM2Total += item.price_per_m2;
+    const pricePerM2 = outlierProfile.byId.get(item.id)?.pricePerM2Clean;
+    if (typeof pricePerM2 === "number" && pricePerM2 > 0) {
+      bucket.pricePerM2Total += pricePerM2;
       bucket.pricePerM2Count += 1;
     }
 
@@ -518,15 +739,33 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
       .slice(0, 12),
     priceHistogram: histogram(prices, 8),
     areaHistogram: histogram(areas, 8),
-    scatter: listings
-      .filter((item) => item.price > 0 && item.area > 0)
-      .map((item) => ({
-        id: item.id,
-        source: item.source,
-        area: item.area,
-        price: item.price,
-        price_per_m2: item.price_per_m2
-      })),
+    scatter: cleanListings
+      .map((item) => {
+        const assessment = outlierProfile.byId.get(item.id);
+        const area = assessment?.areaClean;
+        const price = assessment?.priceClean;
+        const pricePerM2 = assessment?.pricePerM2Clean;
+
+        if (
+          typeof area !== "number" ||
+          typeof price !== "number" ||
+          !Number.isFinite(area) ||
+          !Number.isFinite(price) ||
+          area <= 0 ||
+          price <= 0
+        ) {
+          return null;
+        }
+
+        return {
+          id: item.id,
+          source: item.source,
+          area,
+          price,
+          price_per_m2: typeof pricePerM2 === "number" ? pricePerM2 : null
+        };
+      })
+      .filter((item): item is AnalyticsSnapshot["scatter"][number] => item !== null),
     cityGeo: Object.entries(cityGeoAgg)
       .map(([cityCode, bucket]) => ({
         cityCode,
@@ -542,6 +781,7 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
 
 type GeoBucket = {
   count: number;
+  cleanCount: number;
   prices: number[];
   pricesPerM2: number[];
   rentCount: number;
@@ -561,12 +801,14 @@ const groupingCodeByLevel = (listing: Listing, level: GeoRankingLevel): string =
 };
 
 export function buildGeoRankingRows(listings: Listing[], level: GeoRankingLevel): GeoRankingRow[] {
+  const outlierProfile = buildOutlierProfile(listings);
   const buckets = new Map<string, GeoBucket>();
 
   for (const listing of listings) {
     const code = groupingCodeByLevel(listing, level);
     const bucket = buckets.get(code) ?? {
       count: 0,
+      cleanCount: 0,
       prices: [],
       pricesPerM2: [],
       rentCount: 0,
@@ -574,12 +816,25 @@ export function buildGeoRankingRows(listings: Listing[], level: GeoRankingLevel)
     };
 
     bucket.count += 1;
-    if (listing.price > 0) {
-      bucket.prices.push(listing.price);
+    const assessment = outlierProfile.byId.get(listing.id);
+
+    if (!assessment || assessment.isOutlier) {
+      buckets.set(code, bucket);
+      continue;
     }
 
-    if (typeof listing.price_per_m2 === "number" && Number.isFinite(listing.price_per_m2) && listing.price_per_m2 > 0) {
-      bucket.pricesPerM2.push(listing.price_per_m2);
+    bucket.cleanCount += 1;
+
+    if (typeof assessment.priceClean === "number" && assessment.priceClean > 0) {
+      bucket.prices.push(assessment.priceClean);
+    }
+
+    if (
+      typeof assessment.pricePerM2Clean === "number" &&
+      Number.isFinite(assessment.pricePerM2Clean) &&
+      assessment.pricePerM2Clean > 0
+    ) {
+      bucket.pricesPerM2.push(assessment.pricePerM2Clean);
     }
 
     if (listing.goal === "rent") {
@@ -600,8 +855,8 @@ export function buildGeoRankingRows(listings: Listing[], level: GeoRankingLevel)
       medianPrice: median(bucket.prices),
       meanPricePerM2: mean(bucket.pricesPerM2),
       medianPricePerM2: median(bucket.pricesPerM2),
-      rentShare: bucket.count > 0 ? bucket.rentCount / bucket.count : 0,
-      saleShare: bucket.count > 0 ? bucket.saleCount / bucket.count : 0
+      rentShare: bucket.cleanCount > 0 ? bucket.rentCount / bucket.cleanCount : 0,
+      saleShare: bucket.cleanCount > 0 ? bucket.saleCount / bucket.cleanCount : 0
     }))
     .sort((left, right) => right.count - left.count);
 }

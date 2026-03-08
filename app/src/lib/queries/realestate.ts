@@ -1,4 +1,4 @@
-import { buildCacheKey, runCachedQuery } from "@/lib/queries/cache";
+import { buildCacheKey, isAbortLikeError, runCachedQuery } from "@/lib/queries/cache";
 import type {
   AnalyticsSnapshot,
   FilterOptionSet,
@@ -41,6 +41,7 @@ export type AnalyzeSnapshotDailyResult = {
 };
 
 const DAY_TTL_MS = 24 * 60 * 60 * 1000;
+const LISTINGS_BROWSE_PAGE_LIMIT = 10;
 
 export const EMPTY_FILTER_OPTIONS: FilterOptionSet = {
   goal: [],
@@ -82,7 +83,7 @@ export const EMPTY_LISTINGS_BROWSE_RESULT: ListingsBrowseResult = {
   rows: [],
   totalItems: 0,
   page: 1,
-  pageSize: 12,
+  pageSize: LISTINGS_BROWSE_PAGE_LIMIT,
   totalPages: 1
 };
 
@@ -119,6 +120,23 @@ const toNullableNumber = (value: unknown): number | null => {
 
   const normalized = Number(value);
   return Number.isFinite(normalized) ? normalized : null;
+};
+
+const toBoolean = (value: unknown): boolean => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "t";
+  }
+
+  return false;
 };
 
 const toStringArray = (value: unknown): string[] => {
@@ -244,7 +262,8 @@ const toListing = (row: AnyRecord): Listing => {
     district_code: String(row.district_code ?? ""),
     latitude: toNumber(row.latitude),
     longitude: toNumber(row.longitude),
-    price_per_m2: toNullableNumber(row.price_per_m2)
+    price_per_m2: toNullableNumber(row.price_per_m2),
+    is_outlier: toBoolean(row.is_outlier)
   };
 };
 
@@ -322,9 +341,23 @@ const toMapAreaStats = (value: unknown, level: MapLevel): MapAreaStat[] => {
   }));
 };
 
+const createAbortError = (): Error => {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException("Aborted", "AbortError");
+  }
+
+  const fallback = new Error("Aborted");
+  fallback.name = "AbortError";
+  return fallback;
+};
+
 const handleRpcError = (error: { message?: string } | null): never | void => {
   if (!error) {
     return;
+  }
+
+  if (isAbortLikeError(error)) {
+    throw createAbortError();
   }
 
   throw new Error(error.message ?? "Supabase RPC request failed");
@@ -394,7 +427,7 @@ export async function fetchFilterOptions(options: FetchOptions = {}): Promise<Fi
 
 export async function fetchListingsBrowse(
   filters: ListingFilters,
-  pageSize: number,
+  _pageSize: number,
   options: FetchOptions = {}
 ): Promise<ListingsBrowseResult> {
   const filterPayload = toFilterPayload(filters, true);
@@ -404,7 +437,7 @@ export async function fetchListingsBrowse(
       filters: filterPayload,
       sort: filters.sort,
       page: filters.page,
-      pageSize
+      pageSize: LISTINGS_BROWSE_PAGE_LIMIT
     }),
     ttlMs: options.ttlMs ?? DAY_TTL_MS,
     signal: options.signal,
@@ -415,7 +448,7 @@ export async function fetchListingsBrowse(
           p_filters: filterPayload,
           p_sort: filters.sort,
           p_page: filters.page,
-          p_page_size: pageSize
+          p_page_size: LISTINGS_BROWSE_PAGE_LIMIT
         },
         signal
       );
@@ -426,7 +459,7 @@ export async function fetchListingsBrowse(
         rows,
         totalItems: toNumber(payload.total_items),
         page: Math.max(1, toNumber(payload.page, 1)),
-        pageSize: Math.max(1, toNumber(payload.page_size, pageSize)),
+        pageSize: Math.max(1, toNumber(payload.page_size, LISTINGS_BROWSE_PAGE_LIMIT)),
         totalPages: Math.max(1, toNumber(payload.total_pages, 1))
       };
     }
@@ -621,7 +654,7 @@ export async function fetchMapAreaStats(
   return bundle[level];
 }
 
-export async function fetchLatestListings(limit = 50): Promise<Listing[]> {
+export async function fetchLatestListings(limit = LISTINGS_BROWSE_PAGE_LIMIT): Promise<Listing[]> {
   const fallbackFilters: ListingFilters = {
     goal: "sale",
     rent_frequency: [],

@@ -61,6 +61,7 @@ export interface Listing extends Omit<ListingModelRaw, "rent_frequency"> {
   rent_frequency?: RentFrequency;
   raw_rent_frequency?: RentFrequencyRaw;
   price_per_m2: number | null;
+  is_outlier?: boolean;
 }
 
 export interface ListingFilters {

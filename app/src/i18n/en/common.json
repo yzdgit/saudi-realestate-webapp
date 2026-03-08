@@ -139,6 +139,7 @@
     "no_selection": "Select any listing from table/cards/map to inspect details.",
     "compare": "Compare",
     "compare_selected": "Compare selected listings",
+    "outlier": "Outlier",
     "page": "Page",
     "no_results_title": "No results found",
     "no_results_description": "Try widening your filters or clear them to restore all listings."

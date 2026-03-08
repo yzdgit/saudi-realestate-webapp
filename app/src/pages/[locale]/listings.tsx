@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Head from "next/head";
 import type { GetStaticPaths, GetStaticProps, InferGetStaticPropsType } from "next";
+import { useRouter } from "next/router";
 import { AdPlaceholder } from "@/components/ads/ad-placeholder";
 import { ExplorerShell } from "@/components/layout/explorer-shell";
 import { StatsRow } from "@/components/layout/stats-row";
@@ -24,6 +25,7 @@ import {
   fetchListingsBrowse,
   fetchKpiLive
 } from "@/lib/queries/realestate";
+import { isAbortLikeError } from "@/lib/queries/cache";
 import { DEFAULT_PAGE_SIZE, getGeoDrillLevel } from "@/lib/realestate/pipeline";
 import { HARDCODED_FILTER_OPTIONS } from "@/lib/realestate/hardcoded-filter-options";
 import type { GeoRankingRow, Listing } from "@/lib/realestate/types";
@@ -48,6 +50,7 @@ export const getStaticProps: GetStaticProps<LocalePageProps> = async (context) =
 export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof getStaticProps>) {
   useLocaleDocument(locale);
 
+  const router = useRouter();
   const messages = getMessages(locale);
   const { mode, setMode, filters, setFilters, resetFilters, hrefQuery } = useUrlFilters(locale);
 
@@ -65,9 +68,12 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
   const compareIds = useMemo(() => Object.keys(compareById), [compareById]);
   const compareListings = useMemo(() => Object.values(compareById), [compareById]);
   const drillLevel = useMemo(() => getGeoDrillLevel(filters), [filters]);
-  const isAbortError = (error: unknown) => error instanceof Error && error.name === "AbortError";
 
   useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
     const controller = new AbortController();
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
@@ -97,7 +103,7 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
             return;
           }
 
-          if (isAbortError(nextError)) {
+          if (isAbortLikeError(nextError)) {
             return;
           }
 
@@ -134,7 +140,7 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
           return;
         }
 
-        if (isAbortError(nextError)) {
+        if (isAbortLikeError(nextError)) {
           return;
         }
 
@@ -150,7 +156,7 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
     return () => {
       controller.abort();
     };
-  }, [drillLevel, filters, mode]);
+  }, [drillLevel, filters, mode, router.isReady]);
 
   const openListingDetails = (listing: Listing) => {
     setSelectedListing(listing);

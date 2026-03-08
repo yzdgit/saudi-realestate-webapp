@@ -15,6 +15,7 @@ dist
 app/.env.local
 
 # Supabase local state
+supabase/
 supabase/.temp
 .legacy/
 .temp/
