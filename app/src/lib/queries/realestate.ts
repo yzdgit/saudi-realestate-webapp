@@ -1,4 +1,9 @@
 import { buildCacheKey, isAbortLikeError, runCachedQuery } from "@/lib/queries/cache";
+import {
+  buildAnalyticsSnapshot,
+  buildGeoRankingRows,
+  normalizeFilters
+} from "@/lib/realestate/pipeline";
 import type {
   AnalyticsSnapshot,
   FilterOptionSet,
@@ -6,6 +11,7 @@ import type {
   GeoRankingRow,
   Listing,
   ListingFilters,
+  ListingSort,
   MapAreaStat,
   MapBounds,
   MapLevel
@@ -17,6 +23,16 @@ type AnyRecord = Record<string, unknown>;
 type FetchOptions = {
   signal?: AbortSignal;
   ttlMs?: number;
+};
+
+type SupabaseErrorLike = {
+  message?: string;
+};
+
+type SupabaseResult<T> = {
+  data: T;
+  error: SupabaseErrorLike | null;
+  count?: number | null;
 };
 
 export type ListingsBrowseResult = {
@@ -40,8 +56,58 @@ export type AnalyzeSnapshotDailyResult = {
   rankings: Record<GeoRankingLevel, GeoRankingRow[]>;
 };
 
-const DAY_TTL_MS = 24 * 60 * 60 * 1000;
+const LISTINGS_TTL_MS = 24 * 60 * 60 * 1000;
+export const MV_TTL_MS = 12 * 60 * 60 * 1000;
 const LISTINGS_BROWSE_PAGE_LIMIT = 10;
+const MAP_POINTS_HARD_CAP = 500;
+const SNAPSHOT_BATCH_SIZE = 1000;
+
+const LISTING_SELECT_COLUMNS = [
+  "id",
+  "source",
+  "listing_uri",
+  "goal",
+  "rent_frequency",
+  "price",
+  "area_m2",
+  "rooms",
+  "bedrooms",
+  "bathrooms",
+  "living_rooms",
+  "property_type",
+  "listing_type",
+  "region_code",
+  "city_code",
+  "district_code",
+  "latitude",
+  "longitude",
+  "price_per_m2",
+  "is_outlier"
+].join(",");
+
+const SNAPSHOT_SELECT_COLUMNS = [
+  "id",
+  "source",
+  "listing_uri",
+  "goal",
+  "rent_frequency",
+  "price",
+  "area_m2",
+  "rooms",
+  "bedrooms",
+  "bathrooms",
+  "living_rooms",
+  "property_type",
+  "listing_type",
+  "region_code",
+  "city_code",
+  "district_code",
+  "latitude",
+  "longitude",
+  "price_per_m2",
+  "is_outlier",
+  "listed_at"
+].join(",");
 
 export const EMPTY_FILTER_OPTIONS: FilterOptionSet = {
   goal: [],
@@ -298,80 +364,6 @@ const toListing = (row: AnyRecord): Listing => {
   };
 };
 
-const toSnapshot = (payload: unknown): AnalyticsSnapshot => {
-  const value = toRecord(payload);
-
-  return {
-    totalListings: toNumber(value.totalListings),
-    medianPrice: toNumber(value.medianPrice),
-    meanPrice: toNumber(value.meanPrice),
-    minPrice: toNumber(value.minPrice),
-    maxPrice: toNumber(value.maxPrice),
-    medianPricePerM2: toNumber(value.medianPricePerM2),
-    meanPricePerM2: toNumber(value.meanPricePerM2),
-    minPricePerM2: toNumber(value.minPricePerM2),
-    maxPricePerM2: toNumber(value.maxPricePerM2),
-    medianArea: toNumber(value.medianArea),
-    meanArea: toNumber(value.meanArea),
-    minArea: toNumber(value.minArea),
-    maxArea: toNumber(value.maxArea),
-    rentShare: toNumber(value.rentShare),
-    saleShare: toNumber(value.saleShare),
-    goalDistribution: Array.isArray(value.goalDistribution)
-      ? (value.goalDistribution as AnalyticsSnapshot["goalDistribution"])
-      : [],
-    propertyTypeByGoal: Array.isArray(value.propertyTypeByGoal)
-      ? (value.propertyTypeByGoal as AnalyticsSnapshot["propertyTypeByGoal"])
-      : [],
-    cityDistribution: Array.isArray(value.cityDistribution)
-      ? (value.cityDistribution as AnalyticsSnapshot["cityDistribution"])
-      : [],
-    districtAvgPricePerM2: Array.isArray(value.districtAvgPricePerM2)
-      ? (value.districtAvgPricePerM2 as AnalyticsSnapshot["districtAvgPricePerM2"])
-      : [],
-    priceHistogram: Array.isArray(value.priceHistogram)
-      ? (value.priceHistogram as AnalyticsSnapshot["priceHistogram"])
-      : [],
-    areaHistogram: Array.isArray(value.areaHistogram)
-      ? (value.areaHistogram as AnalyticsSnapshot["areaHistogram"])
-      : [],
-    scatter: Array.isArray(value.scatter)
-      ? (value.scatter as AnalyticsSnapshot["scatter"])
-      : [],
-    cityGeo: Array.isArray(value.cityGeo)
-      ? (value.cityGeo as AnalyticsSnapshot["cityGeo"])
-      : []
-  };
-};
-
-const toGeoRankingRows = (value: unknown, fallbackLevel: GeoRankingLevel): GeoRankingRow[] => {
-  return toRecordArray(value).map((item) => ({
-    code: String(item.code ?? ""),
-    level: String(item.level ?? fallbackLevel) as GeoRankingLevel,
-    count: toNumber(item.count),
-    meanPrice: toNumber(item.meanPrice),
-    medianPrice: toNumber(item.medianPrice),
-    meanPricePerM2: toNumber(item.meanPricePerM2),
-    medianPricePerM2: toNumber(item.medianPricePerM2),
-    rentShare: toNumber(item.rentShare),
-    saleShare: toNumber(item.saleShare)
-  }));
-};
-
-const toMapAreaStats = (value: unknown, level: MapLevel): MapAreaStat[] => {
-  return toRecordArray(value).map((item) => ({
-    level: String(item.level ?? level) as MapAreaStat["level"],
-    code: String(item.code ?? ""),
-    totalListings: toNumber(item.totalListings),
-    meanPrice: toNumber(item.meanPrice),
-    medianPrice: toNumber(item.medianPrice),
-    meanPricePerM2: toNumber(item.meanPricePerM2),
-    medianPricePerM2: toNumber(item.medianPricePerM2),
-    rentShare: toNumber(item.rentShare),
-    saleShare: toNumber(item.saleShare)
-  }));
-};
-
 const createAbortError = (): Error => {
   if (typeof DOMException !== "undefined") {
     return new DOMException("Aborted", "AbortError");
@@ -382,7 +374,7 @@ const createAbortError = (): Error => {
   return fallback;
 };
 
-const handleRpcError = (error: { message?: string } | null): never | void => {
+const handleSupabaseError = (error: SupabaseErrorLike | null): never | void => {
   if (!error) {
     return;
   }
@@ -391,56 +383,252 @@ const handleRpcError = (error: { message?: string } | null): never | void => {
     throw createAbortError();
   }
 
-  throw new Error(error.message ?? "Supabase RPC request failed");
+  throw new Error(error.message ?? "Supabase request failed");
 };
 
-const isMissingApiKeyError = (error: { message?: string } | null | undefined): boolean => {
+const isMissingApiKeyError = (error: SupabaseErrorLike | null | undefined): boolean => {
   const message = error?.message ?? "";
   return message.includes("No API key found in request");
 };
 
-const runRpcOnce = async (
-  fn: string,
-  args: AnyRecord | undefined,
+const applyAbortSignal = <TQuery extends { abortSignal?: (signal: AbortSignal) => TQuery }>(
+  query: TQuery,
   signal?: AbortSignal
-): Promise<{ data: unknown; error: { message?: string } | null }> => {
-  const supabase = getSupabaseBrowserClient() as any;
-  let request = typeof args === "undefined" ? supabase.rpc(fn) : supabase.rpc(fn, args);
-
-  if (signal && request && typeof request.abortSignal === "function") {
-    request = request.abortSignal(signal);
+): TQuery => {
+  if (!signal || !query || typeof query.abortSignal !== "function") {
+    return query;
   }
 
-  const { data, error } = await request;
-  return { data, error };
+  return query.abortSignal(signal);
 };
 
-const rpc = async (
-  fn: string,
-  args: AnyRecord | undefined,
-  signal?: AbortSignal
-): Promise<unknown> => {
-  const firstAttempt = await runRpcOnce(fn, args, signal);
+const runSupabaseQuery = async <T>(
+  queryFactory: (supabase: any) => Promise<SupabaseResult<T>>
+): Promise<SupabaseResult<T>> => {
+  const firstAttempt = await queryFactory(getSupabaseBrowserClient() as any);
 
   if (isMissingApiKeyError(firstAttempt.error)) {
     resetSupabaseBrowserClient();
-    const retryAttempt = await runRpcOnce(fn, args, signal);
-    handleRpcError(retryAttempt.error);
-    return retryAttempt.data;
+    const retryAttempt = await queryFactory(getSupabaseBrowserClient() as any);
+    handleSupabaseError(retryAttempt.error);
+    return retryAttempt;
   }
 
-  const { data, error } = firstAttempt;
-  handleRpcError(error);
-  return data;
+  handleSupabaseError(firstAttempt.error);
+  return firstAttempt;
+};
+
+const applySort = (query: any, sort: ListingSort): any => {
+  switch (sort) {
+    case "price_asc":
+      return query.order("price", { ascending: true, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "price_desc":
+      return query.order("price", { ascending: false, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "area_asc":
+      return query.order("area_m2", { ascending: true, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "area_desc":
+      return query.order("area_m2", { ascending: false, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "price_per_m2_asc":
+      return query.order("price_per_m2", { ascending: true, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "price_per_m2_desc":
+      return query.order("price_per_m2", { ascending: false, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "bedrooms_desc":
+      return query.order("bedrooms", { ascending: false, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+    case "newest":
+    default:
+      return query.order("listed_at", { ascending: false, nullsFirst: false }).order("id", {
+        ascending: false
+      });
+  }
+};
+
+const applyBoundsToQuery = (query: any, bounds: MapBounds): any => {
+  let next = query
+    .gte("latitude", bounds.south)
+    .lte("latitude", bounds.north)
+    .gte("longitude", bounds.west)
+    .lte("longitude", bounds.east);
+
+  return next;
+};
+
+const applyListingFiltersToQuery = (
+  query: any,
+  rawFilters: ListingFilters,
+  includeNumeric: boolean,
+  bounds?: MapBounds,
+  forceBounds = false
+): any => {
+  const filters = normalizeFilters(rawFilters);
+  let next = query.eq("goal", filters.goal).eq("listing_type", filters.listing_type);
+
+  if (filters.rent_frequency.length > 0) {
+    next = next.in("rent_frequency", filters.rent_frequency);
+  }
+
+  if (filters.property_type.length > 0) {
+    next = next.in("property_type", filters.property_type);
+  }
+
+  if (filters.region.length > 0) {
+    next = next.in("region_code", filters.region);
+  }
+
+  if (filters.city.length > 0) {
+    next = next.in("city_code", filters.city);
+  }
+
+  if (filters.district.length > 0) {
+    next = next.in("district_code", filters.district);
+  }
+
+  if (includeNumeric) {
+    if (typeof filters.price_min === "number") {
+      next = next.gte("price", filters.price_min);
+    }
+
+    if (typeof filters.price_max === "number") {
+      next = next.lte("price", filters.price_max);
+    }
+
+    if (typeof filters.area_min === "number") {
+      next = next.gte("area_m2", filters.area_min);
+    }
+
+    if (typeof filters.area_max === "number") {
+      next = next.lte("area_m2", filters.area_max);
+    }
+
+    if (typeof filters.bedrooms_min === "number" && filters.bedrooms_min > 0) {
+      next = next.gte("bedrooms", filters.bedrooms_min);
+    }
+
+    if (typeof filters.bathrooms_min === "number" && filters.bathrooms_min > 0) {
+      next = next.gte("bathrooms", filters.bathrooms_min);
+    }
+
+    if (typeof filters.rooms_min === "number" && filters.rooms_min > 0) {
+      next = next.gte("rooms", filters.rooms_min);
+    }
+  }
+
+  const shouldApplyBounds = forceBounds || (filters.in_view && Boolean(bounds));
+
+  if (shouldApplyBounds && bounds) {
+    next = applyBoundsToQuery(next, bounds);
+  }
+
+  return next;
+};
+
+const loadFilteredSnapshotListings = async (
+  filters: ListingFilters,
+  includeNumeric: boolean,
+  bounds: MapBounds | undefined,
+  signal?: AbortSignal
+): Promise<Listing[]> => {
+  const normalized = normalizeFilters(filters);
+  const rows: Listing[] = [];
+
+  for (let offset = 0; ; offset += SNAPSHOT_BATCH_SIZE) {
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
+
+    const { data } = await runSupabaseQuery<AnyRecord[]>((supabase) => {
+      let request = supabase.from("mv_snapshot_listings_latest").select(SNAPSHOT_SELECT_COLUMNS);
+      request = applyListingFiltersToQuery(request, normalized, includeNumeric, bounds);
+      request = applySort(request, "newest");
+      request = request.range(offset, offset + SNAPSHOT_BATCH_SIZE - 1);
+      request = applyAbortSignal(request, signal);
+      return request;
+    });
+
+    const batch = toRecordArray(data).map(toListing);
+
+    if (batch.length === 0) {
+      break;
+    }
+
+    rows.push(...batch);
+
+    if (batch.length < SNAPSHOT_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return rows;
+};
+
+const fetchFilteredSnapshotListings = async (
+  filters: ListingFilters,
+  includeNumeric: boolean,
+  bounds: MapBounds | undefined,
+  options: FetchOptions = {}
+): Promise<Listing[]> => {
+  const normalized = normalizeFilters(filters);
+  const filterPayload = toFilterPayload(normalized, includeNumeric);
+  const boundsPayload = toBoundsPayload(bounds);
+
+  return runCachedQuery({
+    key: buildCacheKey("mv_snapshot_listings_latest_rows", {
+      filters: filterPayload,
+      includeNumeric,
+      bounds: boundsPayload
+    }),
+    ttlMs: options.ttlMs ?? MV_TTL_MS,
+    signal: options.signal,
+    fetcher: async (signal) => loadFilteredSnapshotListings(normalized, includeNumeric, bounds, signal)
+  });
+};
+
+const mapRankingsToAreaStats = (
+  rankings: GeoRankingRow[],
+  level: MapLevel
+): MapAreaStat[] => {
+  return rankings.map((row) => ({
+    level,
+    code: row.code,
+    totalListings: row.count,
+    meanPrice: row.meanPrice,
+    medianPrice: row.medianPrice,
+    meanPricePerM2: row.meanPricePerM2,
+    medianPricePerM2: row.medianPricePerM2,
+    rentShare: row.rentShare,
+    saleShare: row.saleShare
+  }));
 };
 
 export async function fetchFilterOptions(options: FetchOptions = {}): Promise<FilterOptionSet> {
   return runCachedQuery({
-    key: buildCacheKey("rpc_filter_options"),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    key: buildCacheKey("mv_filter_options"),
+    ttlMs: options.ttlMs ?? MV_TTL_MS,
     signal: options.signal,
     fetcher: async (signal) => {
-      const data = await rpc("rpc_filter_options", undefined, signal);
+      const { data } = await runSupabaseQuery<AnyRecord | null>((supabase) => {
+        let request = supabase
+          .from("mv_filter_options")
+          .select("goal,rent_frequency,property_type,listing_type,region,city,district")
+          .limit(1)
+          .maybeSingle();
+        request = applyAbortSignal(request, signal);
+        return request;
+      });
+
       const payload = toRecord(data);
 
       return {
@@ -461,37 +649,64 @@ export async function fetchListingsBrowse(
   _pageSize: number,
   options: FetchOptions = {}
 ): Promise<ListingsBrowseResult> {
-  const filterPayload = toFilterPayload(filters, true);
+  const normalized = normalizeFilters(filters);
+  const filterPayload = toFilterPayload(normalized, true);
+  const requestedPage = Math.max(1, normalized.page);
 
   return runCachedQuery({
-    key: buildCacheKey("rpc_listings_browse", {
+    key: buildCacheKey("select_listings_browse", {
       filters: filterPayload,
-      sort: filters.sort,
-      page: filters.page,
+      sort: normalized.sort,
+      page: requestedPage,
       pageSize: LISTINGS_BROWSE_PAGE_LIMIT
     }),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    ttlMs: options.ttlMs ?? LISTINGS_TTL_MS,
     signal: options.signal,
     fetcher: async (signal) => {
-      const data = await rpc(
-        "rpc_listings_browse",
-        {
-          p_filters: filterPayload,
-          p_sort: filters.sort,
-          p_page: filters.page,
-          p_page_size: LISTINGS_BROWSE_PAGE_LIMIT
-        },
-        signal
-      );
-      const payload = toRecord(data);
-      const rows = toRecordArray(payload.rows).map(toListing);
+      const runPage = async (page: number): Promise<{ rows: Listing[]; totalItems: number }> => {
+        const from = (page - 1) * LISTINGS_BROWSE_PAGE_LIMIT;
+        const to = from + LISTINGS_BROWSE_PAGE_LIMIT - 1;
+
+        const { data, count } = await runSupabaseQuery<AnyRecord[]>((supabase) => {
+          let request = supabase
+            .from("listings")
+            .select(LISTING_SELECT_COLUMNS, { count: "exact" })
+            .eq("is_active", true);
+
+          request = applyListingFiltersToQuery(request, normalized, true);
+          request = applySort(request, normalized.sort);
+          request = request.range(from, to);
+          request = applyAbortSignal(request, signal);
+          return request;
+        });
+
+        return {
+          rows: toRecordArray(data).map(toListing),
+          totalItems: Math.max(0, count ?? 0)
+        };
+      };
+
+      const initial = await runPage(requestedPage);
+      const totalPages = Math.max(1, Math.ceil(initial.totalItems / LISTINGS_BROWSE_PAGE_LIMIT));
+      const safePage = Math.min(requestedPage, totalPages);
+
+      if (safePage !== requestedPage) {
+        const fallback = await runPage(safePage);
+        return {
+          rows: fallback.rows,
+          totalItems: fallback.totalItems,
+          page: safePage,
+          pageSize: LISTINGS_BROWSE_PAGE_LIMIT,
+          totalPages
+        };
+      }
 
       return {
-        rows,
-        totalItems: toNumber(payload.total_items),
-        page: Math.max(1, toNumber(payload.page, 1)),
-        pageSize: Math.max(1, toNumber(payload.page_size, LISTINGS_BROWSE_PAGE_LIMIT)),
-        totalPages: Math.max(1, toNumber(payload.total_pages, 1))
+        rows: initial.rows,
+        totalItems: initial.totalItems,
+        page: safePage,
+        pageSize: LISTINGS_BROWSE_PAGE_LIMIT,
+        totalPages
       };
     }
   });
@@ -502,28 +717,8 @@ export async function fetchKpiLive(
   bounds?: MapBounds,
   options: FetchOptions = {}
 ): Promise<AnalyticsSnapshot> {
-  const filterPayload = toFilterPayload(filters, true);
-  const boundsPayload = toBoundsPayload(bounds);
-
-  return runCachedQuery({
-    key: buildCacheKey("rpc_kpi_live", {
-      filters: filterPayload,
-      bounds: boundsPayload
-    }),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
-    signal: options.signal,
-    fetcher: async (signal) => {
-      const data = await rpc(
-        "rpc_kpi_live",
-        {
-          p_filters: filterPayload,
-          p_bounds: boundsPayload
-        },
-        signal
-      );
-      return toSnapshot(data);
-    }
-  });
+  const rows = await fetchFilteredSnapshotListings(filters, true, bounds, options);
+  return buildAnalyticsSnapshot(rows);
 }
 
 export async function fetchKpiDaily(
@@ -531,25 +726,8 @@ export async function fetchKpiDaily(
   options: FetchOptions = {}
 ): Promise<AnalyticsSnapshot> {
   const analyticsFilters = stripNumericFilterValues(filters);
-  const filterPayload = toFilterPayload(analyticsFilters, false);
-
-  return runCachedQuery({
-    key: buildCacheKey("rpc_kpi_daily", {
-      filters: filterPayload
-    }),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
-    signal: options.signal,
-    fetcher: async (signal) => {
-      const data = await rpc(
-        "rpc_kpi_daily",
-        {
-          p_filters: filterPayload
-        },
-        signal
-      );
-      return toSnapshot(data);
-    }
-  });
+  const rows = await fetchFilteredSnapshotListings(analyticsFilters, false, undefined, options);
+  return buildAnalyticsSnapshot(rows);
 }
 
 export async function fetchListingsStats(
@@ -565,34 +743,16 @@ export async function fetchAnalyzeSnapshotDaily(
   options: FetchOptions = {}
 ): Promise<AnalyzeSnapshotDailyResult> {
   const analyticsFilters = stripNumericFilterValues(filters);
-  const filterPayload = toFilterPayload(analyticsFilters, false);
+  const rows = await fetchFilteredSnapshotListings(analyticsFilters, false, undefined, options);
 
-  return runCachedQuery({
-    key: buildCacheKey("rpc_analyze_snapshot_daily", {
-      filters: filterPayload
-    }),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
-    signal: options.signal,
-    fetcher: async (signal) => {
-      const data = await rpc(
-        "rpc_analyze_snapshot_daily",
-        {
-          p_filters: filterPayload
-        },
-        signal
-      );
-      const payload = toRecord(data);
-
-      return {
-        snapshot: toSnapshot(payload),
-        rankings: {
-          region: toGeoRankingRows(payload.rankingsRegion, "region"),
-          city: toGeoRankingRows(payload.rankingsCity, "city"),
-          district: toGeoRankingRows(payload.rankingsDistrict, "district")
-        }
-      };
+  return {
+    snapshot: buildAnalyticsSnapshot(rows),
+    rankings: {
+      region: buildGeoRankingRows(rows, "region"),
+      city: buildGeoRankingRows(rows, "city"),
+      district: buildGeoRankingRows(rows, "district")
     }
-  });
+  };
 }
 
 export async function fetchGeoRankings(
@@ -607,36 +767,46 @@ export async function fetchGeoRankings(
 export async function fetchMapPoints(
   filters: ListingFilters,
   bounds: MapBounds | undefined,
-  limit = 500,
+  limit = MAP_POINTS_HARD_CAP,
   options: FetchOptions = {}
 ): Promise<MapPointsResult> {
-  const filterPayload = toFilterPayload(filters, true);
-  const boundsPayload = toBoundsPayload(bounds);
+  if (!bounds) {
+    return EMPTY_MAP_POINTS_RESULT;
+  }
+
+  const normalized = normalizeFilters(filters);
+  const cappedLimit = Math.min(Math.max(1, Math.trunc(limit)), MAP_POINTS_HARD_CAP);
+  const filterPayload = toFilterPayload(normalized, true);
 
   return runCachedQuery({
-    key: buildCacheKey("rpc_map_points", {
+    key: buildCacheKey("select_map_points", {
       filters: filterPayload,
-      bounds: boundsPayload,
-      limit
+      bounds: toBoundsPayload(bounds),
+      limit: cappedLimit
     }),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
+    ttlMs: options.ttlMs ?? LISTINGS_TTL_MS,
     signal: options.signal,
     fetcher: async (signal) => {
-      const data = await rpc(
-        "rpc_map_points",
-        {
-          p_filters: filterPayload,
-          p_bounds: boundsPayload,
-          p_limit: limit
-        },
-        signal
-      );
-      const payload = toRecord(data);
+      const { data, count } = await runSupabaseQuery<AnyRecord[]>((supabase) => {
+        let request = supabase
+          .from("listings")
+          .select(LISTING_SELECT_COLUMNS, { count: "exact" })
+          .eq("is_active", true);
+
+        request = applyListingFiltersToQuery(request, normalized, true, bounds, true);
+        request = applySort(request, "newest");
+        request = request.range(0, cappedLimit - 1);
+        request = applyAbortSignal(request, signal);
+        return request;
+      });
+
+      const rows = toRecordArray(data).map(toListing);
+      const totalInBounds = Math.max(0, count ?? 0);
 
       return {
-        rows: toRecordArray(payload.rows).map(toListing),
-        returnedCount: toNumber(payload.returned_count),
-        totalInBounds: toNumber(payload.total_in_bounds)
+        rows,
+        returnedCount: rows.length,
+        totalInBounds
       };
     }
   });
@@ -647,31 +817,17 @@ export async function fetchMapAreaStatsDailyBundle(
   options: FetchOptions = {}
 ): Promise<MapAreaStatsBundle> {
   const analyticsFilters = stripNumericFilterValues(filters);
-  const filterPayload = toFilterPayload(analyticsFilters, false);
+  const rows = await fetchFilteredSnapshotListings(analyticsFilters, false, undefined, options);
 
-  return runCachedQuery({
-    key: buildCacheKey("rpc_map_area_stats_daily_bundle", {
-      filters: filterPayload
-    }),
-    ttlMs: options.ttlMs ?? DAY_TTL_MS,
-    signal: options.signal,
-    fetcher: async (signal) => {
-      const data = await rpc(
-        "rpc_map_area_stats_daily_bundle",
-        {
-          p_filters: filterPayload
-        },
-        signal
-      );
-      const payload = toRecord(data);
+  const regionRankings = buildGeoRankingRows(rows, "region");
+  const cityRankings = buildGeoRankingRows(rows, "city");
+  const districtRankings = buildGeoRankingRows(rows, "district");
 
-      return {
-        region: toMapAreaStats(payload.region, "region"),
-        city: toMapAreaStats(payload.city, "city"),
-        district: toMapAreaStats(payload.district, "district")
-      };
-    }
-  });
+  return {
+    region: mapRankingsToAreaStats(regionRankings, "region"),
+    city: mapRankingsToAreaStats(cityRankings, "city"),
+    district: mapRankingsToAreaStats(districtRankings, "district")
+  };
 }
 
 export async function fetchMapAreaStats(

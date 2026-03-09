@@ -1135,7 +1135,10 @@ export function ListingsMap({
   }, []);
 
   const fetchBoundaryCollection = useCallback(async (url: string, signal: AbortSignal): Promise<GeoFeatureCollection> => {
-    const response = await fetch(url, { signal });
+    const response = await fetch(url, {
+      signal,
+      cache: "force-cache"
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to load ${url}`);
