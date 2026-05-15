@@ -8,15 +8,14 @@ bun.lockb
 .next
 out
 dist
+app/public/static-data/
+app/tsconfig.tsbuildinfo
 
 # Env
 .env
 .env.local
 app/.env.local
 
-# Supabase local state
-supabase/
-supabase/.temp
 .legacy/
 .temp/
 

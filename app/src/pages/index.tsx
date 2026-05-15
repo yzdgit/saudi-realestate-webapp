@@ -6,7 +6,7 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    void router.replace(`/${defaultLocale}/listings?mode=browse`);
+    void router.replace(`/${defaultLocale}/listings`);
   }, [router]);
 
   return null;

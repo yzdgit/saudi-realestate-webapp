@@ -277,11 +277,21 @@ export function applyListingFilters(
 }
 
 export function applySorting(listings: Listing[], sort: ListingSort): Listing[] {
-  if (sort === "newest") {
-    return [...listings];
-  }
-
   const sorted = [...listings];
+
+  if (sort === "newest") {
+    sorted.sort((left, right) => {
+      const leftAt = left.listed_at ?? "";
+      const rightAt = right.listed_at ?? "";
+
+      if (leftAt === rightAt) {
+        return left.id < right.id ? 1 : -1;
+      }
+
+      return leftAt < rightAt ? 1 : -1;
+    });
+    return sorted;
+  }
 
   sorted.sort((left, right) => {
     switch (sort) {

@@ -13,7 +13,6 @@ import {
   useMap,
   useMapEvents
 } from "react-leaflet";
-import type { ExplorerMode } from "@/lib/explorer-mode";
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -70,7 +69,6 @@ type Props = {
   filters: ListingFilters;
   listings: Listing[];
   overlayMode: MapOverlayMode;
-  mode: ExplorerMode;
   areaStatsByLevel?: Partial<Record<MapLevel, MapAreaStat[]>>;
   recenterSignal?: number;
   onPatchFilters: (patch: Partial<ListingFilters>) => void;
@@ -96,7 +94,7 @@ type AreaStats = {
 };
 
 const markerIcon = L.divIcon({
-  html: '<span style="display:block;width:12px;height:12px;border-radius:9999px;background:#ffffff;border:2px solid rgba(15,23,42,0.9);"></span>',
+  html: '<span class="cluster-marker"></span>',
   className: "",
   iconSize: [12, 12],
   iconAnchor: [6, 6]
@@ -123,7 +121,7 @@ const LEVEL_FILL_RANGE: Record<MapLevel, { min: number; max: number }> = {
   district: { min: 0.05, max: 0.5 }
 };
 
-const GEOJSON_CDN_BASE = "https://cdn.namla.sa/geojson";
+const GEOJSON_BASE = "/static-data";
 
 function sameBounds(left: MapBounds | undefined, right: MapBounds): boolean {
   if (!left) {
@@ -725,7 +723,6 @@ export function ListingsMap({
   filters,
   listings,
   overlayMode,
-  mode,
   areaStatsByLevel,
   recenterSignal,
   onPatchFilters,
@@ -749,7 +746,7 @@ export function ListingsMap({
   const [zoom, setZoom] = useState(6);
   const [selectionLockedByClick, setSelectionLockedByClick] = useState(false);
   const [displayLevel, setDisplayLevel] = useState<MapLevel>("region");
-  const isAnalyzeMode = mode === "analyze";
+  const isAnalyzeMode = true;
 
   const [regionsGeoJson, setRegionsGeoJson] = useState<GeoFeatureCollection | null>(null);
   const [citiesGeoJson, setCitiesGeoJson] = useState<GeoFeatureCollection | null>(null);
@@ -1157,7 +1154,7 @@ export function ListingsMap({
     setLoadingRegion(true);
     setBoundaryError(null);
 
-    void fetchBoundaryCollection(`${GEOJSON_CDN_BASE}/regions.geojson`, controller.signal)
+    void fetchBoundaryCollection(`${GEOJSON_BASE}/regions.geojson`, controller.signal)
       .then((collection) => {
         if (!controller.signal.aborted) {
           setRegionsGeoJson(collection);
@@ -1188,7 +1185,7 @@ export function ListingsMap({
     setLoadingCity(true);
     setBoundaryError(null);
 
-    void fetchBoundaryCollection(`${GEOJSON_CDN_BASE}/cities_polygons.geojson`, controller.signal)
+    void fetchBoundaryCollection(`${GEOJSON_BASE}/cities_polygons.geojson`, controller.signal)
       .then((collection) => {
         if (!controller.signal.aborted) {
           setCitiesGeoJson(collection);
@@ -1221,7 +1218,7 @@ export function ListingsMap({
     setLoadingDistrict(true);
     setBoundaryError(null);
 
-    void fetchBoundaryCollection(`${GEOJSON_CDN_BASE}/districts.geojson`, controller.signal)
+    void fetchBoundaryCollection(`${GEOJSON_BASE}/districts.geojson`, controller.signal)
       .then((collection) => {
         if (!controller.signal.aborted) {
           setDistrictsGeoJson(collection);

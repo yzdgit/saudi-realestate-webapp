@@ -3,10 +3,8 @@
     "home": "Home",
     "listings": "Listings",
     "map": "Map",
-    "analytics": "Analytics",
-    "browse": "Browse",
-    "analyze": "Analyze",
-    "switch_locale": "AR"
+    "statistics": "Statistics",
+    "switch_locale": "العربية"
   },
   "home": {
     "title": "Real Estate Explorer",
@@ -184,5 +182,29 @@
   "pagination": {
     "previous": "Previous",
     "next": "Next"
+  },
+  "loading": {
+    "listings": "Loading listings…",
+    "analytics": "Loading analytics…",
+    "map": "Loading map…",
+    "map_updating": "Updating map…"
+  },
+  "errors": {
+    "load_listings": "Failed to load listings",
+    "load_analytics": "Failed to load analytics",
+    "load_map_stats": "Failed to load map stats",
+    "boundary_title": "Something went wrong",
+    "boundary_description": "An unexpected error occurred while rendering this view.",
+    "boundary_action": "Reload"
+  },
+  "about": {
+    "trigger": "About",
+    "title": "About this project",
+    "body": "A bilingual explorer for the Saudi residential and commercial real-estate market. Combines a fast listings workflow with region-level analytics, served entirely from a static export.",
+    "data_note": "Built on 75,904 real listings from public Saudi property platforms (Aqar, Bayut).",
+    "tech_label": "Tech stack",
+    "tech": "Next.js · TypeScript · Leaflet · Recharts · Tailwind CSS",
+    "view_source": "View source",
+    "close": "Close"
   }
 }

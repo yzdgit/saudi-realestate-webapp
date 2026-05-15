@@ -15,8 +15,7 @@ export default function LocaleEntryRedirect({ locale }: InferGetStaticPropsType<
       pathname: "/[locale]/listings",
       query: {
         ...router.query,
-        locale,
-        mode: "browse"
+        locale
       }
     });
   }, [locale, router]);

@@ -1,24 +1,20 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { BarChart3, Building2, Compass, Globe2, List, Map as MapIcon } from "lucide-react";
-import type { ExplorerMode } from "@/lib/explorer-mode";
+import { BarChart3, Building2, Globe2, List, Map as MapIcon } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
 import { cn } from "@/lib/utils";
+import { AboutDialog } from "@/components/layout/about-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-type ExplorerPage = "listings" | "map";
+export type ExplorerPage = "listings" | "map" | "statistics";
 
 type ExplorerShellProps = {
   locale: Locale;
   messages: LocaleMessages;
   activePage: ExplorerPage;
-  mode: ExplorerMode;
-  onModeChange: (mode: ExplorerMode) => void;
-  showModeToggle?: boolean;
   title: string;
   description: string;
   filterPanelDesktop: React.ReactNode;
@@ -29,8 +25,9 @@ type ExplorerShellProps = {
   hrefQuery?: Record<string, string>;
 };
 
-type IconOption = {
-  value: string;
+type NavItem = {
+  page: ExplorerPage;
+  href: "/[locale]/listings" | "/[locale]/map" | "/[locale]/statistics";
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 };
@@ -48,40 +45,42 @@ function localeLinkFromAsPath(asPath: string, targetLocale: Locale): string {
   return `/${pathParts.join("/")}${queryHash ? `?${queryHash}` : ""}`;
 }
 
-function IconRadioGroup({
-  value,
-  options,
-  onChange
+function NavTabs({
+  items,
+  activePage,
+  hrefQuery
 }: {
-  value: string;
-  options: IconOption[];
-  onChange: (value: string) => void;
+  items: NavItem[];
+  activePage: ExplorerPage;
+  hrefQuery: Record<string, string>;
 }) {
   return (
-    <RadioGroup value={value} onValueChange={onChange} className="flex items-center gap-1 rounded-lg border border-border/70 bg-background/70 p-1">
-      {options.map((option) => {
-        const Icon = option.icon;
-        const isActive = option.value === value;
+    <nav
+      aria-label="Primary"
+      className="flex items-center gap-1 rounded-xl border border-border/70 bg-background/70 p-1 shadow-sm"
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = item.page === activePage;
 
         return (
-          <label key={option.value} className="cursor-pointer">
-            <RadioGroupItem value={option.value} className="peer sr-only" />
-            <span
-              className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors",
-                "hover:bg-secondary/70 hover:text-foreground",
-                isActive && "border-border/80 bg-secondary text-foreground"
-              )}
-              aria-label={option.label}
-              title={option.label}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="sr-only">{option.label}</span>
-            </span>
-          </label>
+          <Link
+            key={item.page}
+            href={{ pathname: item.href, query: hrefQuery }}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
+              "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive && "bg-secondary text-foreground"
+            )}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">{item.label}</span>
+          </Link>
         );
       })}
-    </RadioGroup>
+    </nav>
   );
 }
 
@@ -89,9 +88,6 @@ export function ExplorerShell({
   locale,
   messages,
   activePage,
-  mode,
-  onModeChange,
-  showModeToggle = true,
   title,
   description,
   filterPanelDesktop,
@@ -114,103 +110,70 @@ export function ExplorerShell({
     [hrefQuery, locale]
   );
 
-  const navigateTo = useCallback(
-    (pathname: "/[locale]/listings" | "/[locale]/map") => {
-      void router.push(
-        {
-          pathname,
-          query: mergedQuery
-        },
-        undefined,
-        { scroll: false }
-      );
-    },
-    [mergedQuery, router]
-  );
-
-  const viewStyleValue = activePage === "map" ? "map" : "listings";
-  const viewLevelValue = mode;
-
-  const viewStyleOptions: IconOption[] = [
+  const navItems: NavItem[] = [
     {
-      value: "listings",
+      page: "listings",
+      href: "/[locale]/listings",
       label: messages.navigation.listings,
       icon: List
     },
     {
-      value: "map",
+      page: "map",
+      href: "/[locale]/map",
       label: messages.navigation.map,
       icon: MapIcon
-    }
-  ];
-
-  const viewLevelOptions: IconOption[] = [
-    {
-      value: "browse",
-      label: messages.navigation.browse,
-      icon: Compass
     },
     {
-      value: "analyze",
-      label: messages.navigation.analyze,
+      page: "statistics",
+      href: "/[locale]/statistics",
+      label: messages.navigation.statistics,
       icon: BarChart3
     }
   ];
 
+  const trailingActions = (
+    <div className="flex items-center gap-1.5">
+      <AboutDialog messages={messages} />
+      <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 px-2">
+        <Link
+          href={localeSwitchLink}
+          aria-label={messages.navigation.switch_locale}
+          title={messages.navigation.switch_locale}
+        >
+          <Globe2 className="h-4 w-4" aria-hidden />
+          <span className="hidden text-xs font-medium md:inline">
+            {messages.navigation.switch_locale}
+          </span>
+        </Link>
+      </Button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed inset-x-0 top-0 z-[1100] border-b border-border/70 bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto grid max-w-[1600px] grid-cols-[auto_1fr_auto] items-center gap-2 px-4 py-3 lg:grid-cols-[1fr_auto_1fr] lg:px-6">
-          <div className="flex items-center justify-start lg:hidden">
-            {filterPanelMobile}
-          </div>
-
-          <div className="flex min-w-0 flex-col items-center gap-2">
+        <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-2.5 lg:gap-6 lg:px-6">
+          <div className="flex flex-1 items-center gap-2 lg:gap-3">
+            <div className="lg:hidden">{filterPanelMobile}</div>
             <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground/95">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-card text-foreground">
-                <Building2 className="h-4 w-4" />
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-card text-primary">
+                <Building2 className="h-4 w-4" aria-hidden />
               </span>
-              <span>{messages.home.title}</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <IconRadioGroup
-                value={viewStyleValue}
-                options={viewStyleOptions}
-                onChange={(value) => {
-                  if (value === "listings") {
-                    navigateTo("/[locale]/listings");
-                    return;
-                  }
-
-                  navigateTo("/[locale]/map");
-                }}
-              />
-
-              {showModeToggle ? (
-                <IconRadioGroup
-                  value={viewLevelValue}
-                  options={viewLevelOptions}
-                  onChange={(value) => {
-                    onModeChange(value as ExplorerMode);
-                  }}
-                />
-              ) : null}
+              <span className="hidden whitespace-nowrap sm:inline">
+                {messages.home.title}
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center justify-end">
-            <Button asChild variant="outline" size="sm" className="h-8 w-8 p-0">
-              <Link href={localeSwitchLink} aria-label={messages.navigation.switch_locale} title={messages.navigation.switch_locale}>
-                <Globe2 className="h-4 w-4" />
-                <span className="sr-only">{messages.navigation.switch_locale}</span>
-              </Link>
-            </Button>
+          <div className="flex flex-shrink-0 items-center justify-center">
+            <NavTabs items={navItems} activePage={activePage} hrefQuery={mergedQuery} />
           </div>
+
+          <div className="flex flex-1 items-center justify-end">{trailingActions}</div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-4 p-4 pt-[112px] lg:grid-cols-[320px_minmax(0,1fr)] lg:p-6 lg:pt-[118px]">
+      <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-4 p-4 pt-[80px] lg:grid-cols-[320px_minmax(0,1fr)] lg:p-6 lg:pt-[88px]">
         <aside className="hidden lg:block">{filterPanelDesktop}</aside>
 
         <div className="space-y-4">
@@ -225,7 +188,7 @@ export function ExplorerShell({
 
           {statsRow}
 
-          <div className={cn("space-y-4")}>{children}</div>
+          <div className="space-y-4">{children}</div>
         </div>
       </div>
     </div>

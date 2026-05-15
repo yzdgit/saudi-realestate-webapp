@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { getMockListings } from "./mock-repository";
 import type { Listing } from "./types";
 import {
   applyListingFilters,
@@ -9,6 +8,71 @@ import {
   parseFiltersFromQuery,
   serializeFiltersToQuery
 } from "./pipeline";
+
+function makeListing(overrides: Partial<Listing> = {}): Listing {
+  return {
+    id: "lst-base",
+    source: "aqar",
+    listing_uri: "https://aqar.example/listings/base",
+    goal: "sale",
+    rent_frequency: undefined,
+    raw_rent_frequency: undefined,
+    price: 1_500_000,
+    area: 250,
+    rooms: 6,
+    bedrooms: 4,
+    bathrooms: 3,
+    living_rooms: 1,
+    property_type: "villa",
+    listing_type: "residential",
+    region_code: "1",
+    city_code: "3",
+    district_code: "10100003075",
+    latitude: 24.7138,
+    longitude: 46.6753,
+    price_per_m2: 6000,
+    listed_at: "2026-01-15T10:00:00Z",
+    ...overrides
+  };
+}
+
+function getFixtureListings(): Listing[] {
+  return [
+    makeListing({ id: "lst-1", price: 950_000, area: 180, price_per_m2: 950_000 / 180 }),
+    makeListing({
+      id: "lst-2",
+      goal: "rent",
+      rent_frequency: "annually",
+      raw_rent_frequency: "annually",
+      price: 80_000,
+      area: 150,
+      price_per_m2: 80_000 / 150,
+      property_type: "apartment"
+    }),
+    makeListing({
+      id: "lst-3",
+      city_code: "18",
+      region_code: "2",
+      district_code: "10200018001",
+      price: 1_200_000,
+      area: 220,
+      price_per_m2: 1_200_000 / 220,
+      latitude: 21.5291,
+      longitude: 39.1725
+    }),
+    makeListing({
+      id: "lst-4",
+      city_code: "13",
+      region_code: "5",
+      district_code: "10500013010",
+      price: 700_000,
+      area: 200,
+      price_per_m2: 700_000 / 200,
+      latitude: 26.2734,
+      longitude: 50.1996
+    })
+  ];
+}
 
 describe("realestate pipeline", () => {
   it("parses and serializes query filters", () => {
@@ -52,7 +116,7 @@ describe("realestate pipeline", () => {
   });
 
   it("filters listings by goal and price", () => {
-    const listings = getMockListings();
+    const listings = getFixtureListings();
 
     const result = applyListingFilters(listings, {
       goal: "sale",
@@ -79,7 +143,7 @@ describe("realestate pipeline", () => {
   });
 
   it("builds analytics snapshot for filtered listings", () => {
-    const listings = getMockListings();
+    const listings = getFixtureListings();
     const snapshot = buildAnalyticsSnapshot(listings);
 
     expect(snapshot.totalListings).toBe(listings.length);
@@ -89,7 +153,7 @@ describe("realestate pipeline", () => {
   });
 
   it("treats zero numeric values as missing in analytics calculations", () => {
-    const [base] = getMockListings();
+    const [base] = getFixtureListings();
 
     const listings: Listing[] = [
       {
@@ -120,7 +184,7 @@ describe("realestate pipeline", () => {
   });
 
   it("applies fixed hard-validity thresholds before analytics metrics", () => {
-    const [base] = getMockListings();
+    const [base] = getFixtureListings();
     const validArea = 200;
 
     const listings: Listing[] = [
@@ -153,7 +217,7 @@ describe("realestate pipeline", () => {
   });
 
   it("uses MAD + winsorization to prevent extreme outliers from distorting charts", () => {
-    const [base] = getMockListings();
+    const [base] = getFixtureListings();
     const normalListings: Listing[] = Array.from({ length: 20 }, (_, index) => {
       const area = 200;
       const price = 1000000 + index * 10000;
@@ -192,7 +256,7 @@ describe("realestate pipeline", () => {
   });
 
   it("detects outliers separately for sale and rent cohorts", () => {
-    const [base] = getMockListings();
+    const [base] = getFixtureListings();
 
     const saleListings: Listing[] = Array.from({ length: 100 }, (_, index) => {
       const area = 200;
@@ -235,7 +299,7 @@ describe("realestate pipeline", () => {
   });
 
   it("builds geo ranking rows with expected shape", () => {
-    const listings = getMockListings();
+    const listings = getFixtureListings();
     const rows = buildGeoRankingRows(listings, "region");
 
     expect(rows.length).toBeGreaterThan(0);
@@ -244,7 +308,7 @@ describe("realestate pipeline", () => {
   });
 
   it("treats zero values as missing in geo rankings", () => {
-    const [base] = getMockListings();
+    const [base] = getFixtureListings();
     const listings: Listing[] = [
       {
         ...base,
