@@ -130,6 +130,8 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
         <meta name="description" content={messages.map.description} />
         <link rel="alternate" hrefLang="en" href="/en/map/" />
         <link rel="alternate" hrefLang="ar" href="/ar/map/" />
+        <link rel="preload" href="/static-data/listings.json" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/static-data/regions.geojson" as="fetch" crossOrigin="anonymous" />
       </Head>
 
       <ErrorBoundary

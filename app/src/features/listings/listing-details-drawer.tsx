@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
 import { formatArea, formatDecimal, formatNumber } from "@/lib/format";
 import { getCityLabel, getDistrictLabel, getRegionLabel } from "@/lib/location-codes";
+import { loadListingUri } from "@/lib/realestate/dataset";
 import type { Listing } from "@/lib/realestate/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,32 @@ type Props = {
 };
 
 export function ListingDetailsDrawer({ locale, messages, listing, open, onOpenChange }: Props) {
+  const [resolvedUri, setResolvedUri] = useState<string | undefined>(listing?.listing_uri);
+
+  useEffect(() => {
+    if (!open || !listing) {
+      return;
+    }
+
+    if (listing.listing_uri) {
+      setResolvedUri(listing.listing_uri);
+      return;
+    }
+
+    let cancelled = false;
+    setResolvedUri(undefined);
+    void loadListingUri(listing.id)
+      .then((uri) => {
+        if (!cancelled) setResolvedUri(uri);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedUri(undefined);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, listing]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -140,12 +168,19 @@ export function ListingDetailsDrawer({ locale, messages, listing, open, onOpenCh
 
               <Separator />
 
-              <Button asChild className="w-full gap-2">
-                <Link href={listing.listing_uri} target="_blank" rel="noreferrer">
+              {resolvedUri ? (
+                <Button asChild className="w-full gap-2">
+                  <Link href={resolvedUri} target="_blank" rel="noreferrer">
+                    {messages.listings.open_source}
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : (
+                <Button className="w-full gap-2" disabled>
                   {messages.listings.open_source}
                   <ExternalLink className="h-4 w-4" />
-                </Link>
-              </Button>
+                </Button>
+              )}
             </>
           )}
         </div>

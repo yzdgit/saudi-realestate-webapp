@@ -250,19 +250,28 @@ export function normalizeCsvRow(row, rowNumber) {
 
   const listingUri = normalizeListingUri(source, listingUriRaw);
   const stableSeed = `${source}:${externalId || listingUri}:${listingUri}`;
+  const id = toStableId(stableSeed);
   const pricePerM2 = area > 0 ? price / area : null;
+
+  // Round numeric fields for compactness on disk. Stats are computed on these
+  // rounded values; differences from raw CSV are well below display precision.
+  const roundedPrice = Math.round(price);
+  const roundedArea = Math.round(area);
+  const roundedPricePerM2 =
+    Number.isFinite(pricePerM2) && pricePerM2 !== null ? Math.round(pricePerM2) : null;
+  // 5 decimal places ≈ 1.1 m accuracy at the equator — plenty for map clustering.
+  const roundedLat = Math.round(latitude * 1e5) / 1e5;
+  const roundedLng = Math.round(longitude * 1e5) / 1e5;
 
   return {
     isActive,
     listing: {
-      id: toStableId(stableSeed),
+      id,
       source,
-      listing_uri: listingUri,
       goal,
       rent_frequency: normalizedRentFrequency,
-      raw_rent_frequency: normalizedRentFrequency,
-      price,
-      area,
+      price: roundedPrice,
+      area: roundedArea,
       rooms,
       bedrooms,
       bathrooms,
@@ -272,11 +281,12 @@ export function normalizeCsvRow(row, rowNumber) {
       region_code: regionCode,
       city_code: cityCode,
       district_code: districtCode,
-      latitude,
-      longitude,
-      price_per_m2: Number.isFinite(pricePerM2) ? pricePerM2 : null,
+      latitude: roundedLat,
+      longitude: roundedLng,
+      price_per_m2: roundedPricePerM2,
       listed_at: String(row.listed_at ?? "").trim()
-    }
+    },
+    uri: listingUri
   };
 }
 
@@ -331,6 +341,7 @@ export async function generateStaticData({
   outputDir = path.resolve(rootDir, "public", "static-data")
 } = {}) {
   const listings = [];
+  const uriLookup = {};
   let sourceRowCount = 0;
   let inactiveRowCount = 0;
 
@@ -344,6 +355,9 @@ export async function generateStaticData({
     }
 
     listings.push(normalized.listing);
+    if (normalized.uri) {
+      uriLookup[normalized.listing.id] = normalized.uri;
+    }
   });
 
   const readAndValidateGeoJson = async (filePath, fileLabel) => {
@@ -365,6 +379,7 @@ export async function generateStaticData({
   await mkdir(outputDir, { recursive: true });
 
   const listingsOutputPath = path.join(outputDir, "listings.json");
+  const urisOutputPath = path.join(outputDir, "listing-uris.json");
   const regionsOutputPath = path.join(outputDir, "regions.geojson");
   const citiesOutputPath = path.join(outputDir, "cities.geojson");
   const citiesPolygonsOutputPath = path.join(outputDir, "cities_polygons.geojson");
@@ -392,6 +407,7 @@ export async function generateStaticData({
   };
 
   await writeFile(listingsOutputPath, JSON.stringify(payload), "utf8");
+  await writeFile(urisOutputPath, JSON.stringify(uriLookup), "utf8");
   await copyFile(regionsGeoJsonPath, regionsOutputPath);
   await copyFile(citiesGeoJsonPath, citiesOutputPath);
   await copyFile(citiesPolygonsGeoJsonPath, citiesPolygonsOutputPath);
@@ -399,10 +415,12 @@ export async function generateStaticData({
 
   return {
     listingsOutputPath,
+    urisOutputPath,
     regionsOutputPath,
     citiesOutputPath,
     citiesPolygonsOutputPath,
     districtOutputPath,
+    uriCount: Object.keys(uriLookup).length,
     ...payload.counts
   };
 }
@@ -412,6 +430,7 @@ async function main() {
   console.log(
     `Prepared static data: ${result.activeRows}/${result.totalRows} active listings -> ${result.listingsOutputPath}`
   );
+  console.log(`Prepared listing URI lookup (${result.uriCount} entries) -> ${result.urisOutputPath}`);
   console.log(`Prepared regions GeoJSON (${result.regionFeatures} features) -> ${result.regionsOutputPath}`);
   console.log(`Prepared cities GeoJSON (${result.cityFeatures} features) -> ${result.citiesOutputPath}`);
   console.log(`Prepared cities polygons GeoJSON (${result.cityPolygonFeatures} features) -> ${result.citiesPolygonsOutputPath}`);

@@ -135,6 +135,7 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
         <meta name="description" content={messages.listings.description} />
         <link rel="alternate" hrefLang="en" href="/en/listings/" />
         <link rel="alternate" hrefLang="ar" href="/ar/listings/" />
+        <link rel="preload" href="/static-data/listings.json" as="fetch" crossOrigin="anonymous" />
       </Head>
 
       <ErrorBoundary

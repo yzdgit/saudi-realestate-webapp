@@ -277,21 +277,13 @@ export function applyListingFilters(
 }
 
 export function applySorting(listings: Listing[], sort: ListingSort): Listing[] {
-  const sorted = [...listings];
-
   if (sort === "newest") {
-    sorted.sort((left, right) => {
-      const leftAt = left.listed_at ?? "";
-      const rightAt = right.listed_at ?? "";
-
-      if (leftAt === rightAt) {
-        return left.id < right.id ? 1 : -1;
-      }
-
-      return leftAt < rightAt ? 1 : -1;
-    });
-    return sorted;
+    // Dataset is pre-sorted by listed_at desc at load time (see dataset.ts).
+    // Array.filter preserves order, so the filtered list is already newest-first.
+    return listings;
   }
+
+  const sorted = [...listings];
 
   sorted.sort((left, right) => {
     switch (sort) {
@@ -383,7 +375,13 @@ const min = (values: number[]): number => {
     return 0;
   }
 
-  return Math.min(...values);
+  let result = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i] < result) {
+      result = values[i];
+    }
+  }
+  return result;
 };
 
 const max = (values: number[]): number => {
@@ -391,7 +389,13 @@ const max = (values: number[]): number => {
     return 0;
   }
 
-  return Math.max(...values);
+  let result = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i] > result) {
+      result = values[i];
+    }
+  }
+  return result;
 };
 
 const OUTLIER_MIN_PRICE = 5000;
@@ -609,13 +613,62 @@ const buildOutlierProfile = (listings: Listing[]): OutlierProfile => {
   return { byId };
 };
 
+const SCATTER_SAMPLE_CAP = 500;
+
+function sampleScatter(
+  listings: Listing[],
+  profile: OutlierProfile,
+  cap: number
+): AnalyticsSnapshot["scatter"] {
+  const result: AnalyticsSnapshot["scatter"] = [];
+  if (listings.length === 0) {
+    return result;
+  }
+
+  const stride = Math.max(1, Math.floor(listings.length / cap));
+
+  for (let i = 0; i < listings.length && result.length < cap; i += stride) {
+    const item = listings[i];
+    const assessment = profile.byId.get(item.id);
+    const area = assessment?.areaClean;
+    const price = assessment?.priceClean;
+    const pricePerM2 = assessment?.pricePerM2Clean;
+
+    if (
+      typeof area !== "number" ||
+      typeof price !== "number" ||
+      !Number.isFinite(area) ||
+      !Number.isFinite(price) ||
+      area <= 0 ||
+      price <= 0
+    ) {
+      continue;
+    }
+
+    result.push({
+      id: item.id,
+      source: item.source,
+      area,
+      price,
+      price_per_m2: typeof pricePerM2 === "number" ? pricePerM2 : null
+    });
+  }
+
+  return result;
+}
+
 const histogram = (values: number[], bins: number): HistogramDatum[] => {
   if (values.length === 0) {
     return [];
   }
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  let min = values[0];
+  let max = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    const v = values[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
 
   if (min === max) {
     return [{ range: `${Math.round(min)}`, count: values.length }];
@@ -749,33 +802,7 @@ export function buildAnalyticsSnapshot(listings: Listing[]): AnalyticsSnapshot {
       .slice(0, 12),
     priceHistogram: histogram(prices, 8),
     areaHistogram: histogram(areas, 8),
-    scatter: cleanListings
-      .map((item) => {
-        const assessment = outlierProfile.byId.get(item.id);
-        const area = assessment?.areaClean;
-        const price = assessment?.priceClean;
-        const pricePerM2 = assessment?.pricePerM2Clean;
-
-        if (
-          typeof area !== "number" ||
-          typeof price !== "number" ||
-          !Number.isFinite(area) ||
-          !Number.isFinite(price) ||
-          area <= 0 ||
-          price <= 0
-        ) {
-          return null;
-        }
-
-        return {
-          id: item.id,
-          source: item.source,
-          area,
-          price,
-          price_per_m2: typeof pricePerM2 === "number" ? pricePerM2 : null
-        };
-      })
-      .filter((item): item is AnalyticsSnapshot["scatter"][number] => item !== null),
+    scatter: sampleScatter(cleanListings, outlierProfile, SCATTER_SAMPLE_CAP),
     cityGeo: Object.entries(cityGeoAgg)
       .map(([cityCode, bucket]) => ({
         cityCode,
@@ -809,6 +836,93 @@ const groupingCodeByLevel = (listing: Listing, level: GeoRankingLevel): string =
 
   return listing.district_code;
 };
+
+// Fast aggregate-only snapshot for pages that show the stats row but no charts.
+// Skips outlier processing, histograms, scatter, distributions, and rankings.
+// Returns the same AnalyticsSnapshot shape with chart fields left empty.
+export function buildBasicStats(listings: Listing[]): AnalyticsSnapshot {
+  const totalListings = listings.length;
+
+  if (totalListings === 0) {
+    return {
+      totalListings: 0,
+      medianPrice: 0,
+      meanPrice: 0,
+      minPrice: 0,
+      maxPrice: 0,
+      medianPricePerM2: 0,
+      meanPricePerM2: 0,
+      minPricePerM2: 0,
+      maxPricePerM2: 0,
+      medianArea: 0,
+      meanArea: 0,
+      minArea: 0,
+      maxArea: 0,
+      rentShare: 0,
+      saleShare: 0,
+      goalDistribution: [],
+      propertyTypeByGoal: [],
+      cityDistribution: [],
+      districtAvgPricePerM2: [],
+      priceHistogram: [],
+      areaHistogram: [],
+      scatter: [],
+      cityGeo: []
+    };
+  }
+
+  const prices: number[] = [];
+  const pricesPerM2: number[] = [];
+  const areas: number[] = [];
+  let saleCount = 0;
+  let rentCount = 0;
+
+  for (const item of listings) {
+    if (Number.isFinite(item.price) && item.price > 0) {
+      prices.push(item.price);
+    }
+    if (Number.isFinite(item.area) && item.area > 0) {
+      areas.push(item.area);
+    }
+    if (typeof item.price_per_m2 === "number" && Number.isFinite(item.price_per_m2) && item.price_per_m2 > 0) {
+      pricesPerM2.push(item.price_per_m2);
+    }
+    if (item.goal === "sale") {
+      saleCount += 1;
+    } else if (item.goal === "rent") {
+      rentCount += 1;
+    }
+  }
+
+  return {
+    totalListings,
+    medianPrice: median(prices),
+    meanPrice: mean(prices),
+    minPrice: min(prices),
+    maxPrice: max(prices),
+    medianPricePerM2: median(pricesPerM2),
+    meanPricePerM2: mean(pricesPerM2),
+    minPricePerM2: min(pricesPerM2),
+    maxPricePerM2: max(pricesPerM2),
+    medianArea: median(areas),
+    meanArea: mean(areas),
+    minArea: min(areas),
+    maxArea: max(areas),
+    rentShare: totalListings > 0 ? rentCount / totalListings : 0,
+    saleShare: totalListings > 0 ? saleCount / totalListings : 0,
+    goalDistribution: [
+      { key: "sale", label: "sale", value: saleCount },
+      { key: "rent", label: "rent", value: rentCount }
+    ],
+    propertyTypeByGoal: [],
+    cityDistribution: [],
+    districtAvgPricePerM2: [],
+    priceHistogram: [],
+    areaHistogram: [],
+    scatter: [],
+    cityGeo: []
+  };
+}
 
 export function buildGeoRankingRows(listings: Listing[], level: GeoRankingLevel): GeoRankingRow[] {
   const outlierProfile = buildOutlierProfile(listings);

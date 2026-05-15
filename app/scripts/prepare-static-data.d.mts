@@ -1,10 +1,8 @@
 export type NormalizedPreparedListing = {
   id: string;
   source: "aqar" | "bayut" | "dealapp";
-  listing_uri: string;
   goal: "sale" | "rent";
   rent_frequency?: "monthly" | "quarterly" | "semi" | "annually";
-  raw_rent_frequency?: "monthly" | "quarterly" | "semi" | "annually";
   price: number;
   area: number;
   rooms?: number;
@@ -25,6 +23,7 @@ export type NormalizedPreparedListing = {
 export type NormalizedCsvRow = {
   isActive: boolean;
   listing: NormalizedPreparedListing;
+  uri?: string;
 };
 
 export type GenerateStaticDataOptions = {
@@ -39,6 +38,7 @@ export type GenerateStaticDataOptions = {
 
 export type GenerateStaticDataResult = {
   listingsOutputPath: string;
+  urisOutputPath: string;
   regionsOutputPath: string;
   citiesOutputPath: string;
   citiesPolygonsOutputPath: string;
@@ -46,6 +46,7 @@ export type GenerateStaticDataResult = {
   totalRows: number;
   inactiveRows: number;
   activeRows: number;
+  uriCount: number;
   regionFeatures: number;
   cityFeatures: number;
   cityPolygonFeatures: number;

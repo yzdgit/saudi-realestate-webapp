@@ -108,6 +108,7 @@ export default function StatisticsPage({ locale }: InferGetStaticPropsType<typeo
         <meta name="description" content={messages.analytics.description} />
         <link rel="alternate" hrefLang="en" href="/en/statistics/" />
         <link rel="alternate" hrefLang="ar" href="/ar/statistics/" />
+        <link rel="preload" href="/static-data/listings.json" as="fetch" crossOrigin="anonymous" />
       </Head>
 
       <ErrorBoundary

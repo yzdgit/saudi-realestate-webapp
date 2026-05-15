@@ -4,6 +4,7 @@ import {
   applyListingFilters,
   applySorting,
   buildAnalyticsSnapshot,
+  buildBasicStats,
   buildGeoRankingRows,
   isInBounds,
   normalizeFilters,
@@ -289,7 +290,8 @@ export async function fetchKpiLive(
     fetcher: async (signal) => {
       const listings = await loadDataset(signal);
       const filtered = filterListingsWithBounds(listings, normalized, bounds, false);
-      return buildAnalyticsSnapshot(filtered);
+      // Fast path: no histograms/scatter/distributions needed for the stats row.
+      return buildBasicStats(filtered);
     }
   });
 }

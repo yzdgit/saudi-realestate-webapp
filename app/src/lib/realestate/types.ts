@@ -38,7 +38,7 @@ export type ListingSort =
 
 export interface ListingModelRaw {
   source: ListingSource;
-  listing_uri: string;
+  listing_uri?: string;
   goal: ListingGoal;
   rent_frequency?: RentFrequencyRaw;
   price: number;
