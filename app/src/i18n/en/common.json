@@ -51,7 +51,12 @@
     "bedrooms_min": "Min beds",
     "bathrooms_min": "Min baths",
     "rooms_min": "Min rooms",
-    "in_view": "Only in map view"
+    "in_view": "Only in map view",
+    "search_placeholder": "Search…",
+    "no_matches": "No matches",
+    "region_placeholder": "All regions",
+    "city_placeholder": "All cities",
+    "district_placeholder": "All districts"
   },
   "goal": {
     "sale": "Sale",
@@ -135,8 +140,11 @@
     "open_source": "Open source listing",
     "details_title": "Listing Details",
     "no_selection": "Select any listing from table/cards/map to inspect details.",
-    "compare": "Compare",
+    "compare": "Add to compare",
+    "in_compare": "In compare",
     "compare_selected": "Compare selected listings",
+    "compare_limit": "Up to 3 listings",
+    "results_summary": "{showing} of {total}",
     "outlier": "Outlier",
     "page": "Page",
     "no_results_title": "No results found",

@@ -120,8 +120,6 @@ export default function StatisticsPage({ locale }: InferGetStaticPropsType<typeo
           locale={locale}
           messages={messages}
           activePage="statistics"
-          title={messages.analytics.title}
-          description={messages.analytics.description}
           filterPanelDesktop={
             <FilterPanelDesktop
               locale={locale}

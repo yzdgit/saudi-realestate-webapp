@@ -8,7 +8,7 @@ export function MapSkeleton({ className }: Props) {
   return (
     <div
       className={cn(
-        "relative h-[58vh] min-h-[420px] overflow-hidden rounded-xl border border-border/60 bg-muted/20",
+        "relative h-full min-h-[420px] overflow-hidden bg-muted/20",
         className
       )}
       aria-busy="true"

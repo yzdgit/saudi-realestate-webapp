@@ -1,120 +1,116 @@
 import type { Locale } from "@/lib/i18n";
 import type { LocaleMessages } from "@/lib/messages";
-import { formatArea, formatNumber } from "@/lib/format";
+import { formatArea, formatNumber, formatPercent } from "@/lib/format";
 import type { AnalyticsSnapshot } from "@/lib/realestate/types";
-import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { CurrencyValue } from "@/components/ui/currency-value";
 
 type Props = {
   locale: Locale;
   messages: LocaleMessages;
   snapshot: AnalyticsSnapshot;
+  variant?: "panel" | "overlay";
+  className?: string;
 };
 
-export function StatsRow({ locale, messages, snapshot }: Props) {
+type Metric = {
+  key: string;
+  label: string;
+  value: React.ReactNode;
+};
+
+export function StatsRow({ locale, messages, snapshot, variant = "panel", className }: Props) {
+  const hasData = snapshot.totalListings > 0;
+
+  const metrics: Metric[] = [
+    {
+      key: "total",
+      label: messages.kpi.total_listings,
+      value: <span className="num">{formatNumber(snapshot.totalListings, locale)}</span>
+    },
+    {
+      key: "median-price",
+      label: messages.kpi.median_price,
+      value: hasData ? (
+        <CurrencyValue value={snapshot.medianPrice} locale={locale} className="num" />
+      ) : (
+        <span className="num text-muted-foreground">—</span>
+      )
+    },
+    {
+      key: "median-price-per-m2",
+      label: messages.kpi.median_price_per_m2,
+      value: hasData ? (
+        <span className="inline-flex items-center gap-1 num">
+          <CurrencyValue value={snapshot.medianPricePerM2} locale={locale} />
+          <span className="text-muted-foreground">/m²</span>
+        </span>
+      ) : (
+        <span className="num text-muted-foreground">—</span>
+      )
+    },
+    {
+      key: "median-area",
+      label: messages.kpi.median_area,
+      value: hasData ? (
+        <span className="num">{formatArea(snapshot.medianArea, locale)}</span>
+      ) : (
+        <span className="num text-muted-foreground">—</span>
+      )
+    },
+    {
+      key: "mix",
+      label: messages.kpi.rent_sale_mix,
+      value: hasData ? (
+        <span className="num">
+          {formatPercent(snapshot.saleShare, locale)}
+          <span className="text-muted-foreground"> · </span>
+          {formatPercent(snapshot.rentShare, locale)}
+        </span>
+      ) : (
+        <span className="num text-muted-foreground">—</span>
+      )
+    }
+  ];
+
+  if (variant === "overlay") {
+    return (
+      <div
+        className={cn(
+          "pointer-events-auto inline-flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border/70 bg-surface-2/90 px-3 py-2 text-xs shadow-lg backdrop-blur-sm",
+          className
+        )}
+        data-section
+      >
+        {metrics.map((metric, index) => (
+          <div key={metric.key} className="flex items-baseline gap-2">
+            <span className="uppercase tracking-wide text-muted-foreground">{metric.label}</span>
+            <span className="font-medium text-foreground">{metric.value}</span>
+            {index < metrics.length - 1 ? (
+              <span className="hidden text-border md:inline">|</span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card className="border-border/70 bg-card/80">
-        <CardContent className="p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {messages.kpi.total_listings}
+    <section
+      data-section
+      className={cn(
+        "grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/70 bg-border/40 sm:grid-cols-3 lg:grid-cols-5",
+        className
+      )}
+    >
+      {metrics.map((metric) => (
+        <div key={metric.key} className="bg-surface-2 px-4 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {metric.label}
           </p>
-          <p className="mt-2 text-lg font-semibold text-foreground">
-            {formatNumber(snapshot.totalListings, locale)}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70 bg-card/80">
-        <CardContent className="space-y-2 p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {messages.kpi.price_stats}
-          </p>
-          <div className="space-y-1 text-sm">
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.min}</span>
-              <CurrencyValue value={snapshot.minPrice} locale={locale} />
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.mean}</span>
-              <CurrencyValue value={snapshot.meanPrice} locale={locale} />
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.median}</span>
-              <CurrencyValue value={snapshot.medianPrice} locale={locale} />
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.max}</span>
-              <CurrencyValue value={snapshot.maxPrice} locale={locale} />
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70 bg-card/80">
-        <CardContent className="space-y-2 p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {messages.kpi.price_per_m2_stats}
-          </p>
-          <div className="space-y-1 text-sm">
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.min}</span>
-              <span className="inline-flex items-center gap-1">
-                <CurrencyValue value={snapshot.minPricePerM2} locale={locale} />
-                <span>/ m²</span>
-              </span>
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.mean}</span>
-              <span className="inline-flex items-center gap-1">
-                <CurrencyValue value={snapshot.meanPricePerM2} locale={locale} />
-                <span>/ m²</span>
-              </span>
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.median}</span>
-              <span className="inline-flex items-center gap-1">
-                <CurrencyValue value={snapshot.medianPricePerM2} locale={locale} />
-                <span>/ m²</span>
-              </span>
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.max}</span>
-              <span className="inline-flex items-center gap-1">
-                <CurrencyValue value={snapshot.maxPricePerM2} locale={locale} />
-                <span>/ m²</span>
-              </span>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70 bg-card/80">
-        <CardContent className="space-y-2 p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {messages.kpi.area_stats}
-          </p>
-          <div className="space-y-1 text-sm">
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.min}</span>
-              <span>{formatArea(snapshot.minArea, locale)}</span>
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.mean}</span>
-              <span>{formatArea(snapshot.meanArea, locale)}</span>
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.median}</span>
-              <span>{formatArea(snapshot.medianArea, locale)}</span>
-            </p>
-            <p className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{messages.common.max}</span>
-              <span>{formatArea(snapshot.maxArea, locale)}</span>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
+          <p className="mt-1.5 text-base font-semibold text-foreground sm:text-lg">{metric.value}</p>
+        </div>
+      ))}
     </section>
   );
 }

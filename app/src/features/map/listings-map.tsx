@@ -1417,23 +1417,23 @@ export function ListingsMap({
   }, []);
 
   return (
-    <div className={`relative ${className ?? ""}`}>
-      <div className="pointer-events-none absolute start-3 top-3 z-[1000] rounded-md border border-border/70 bg-background/85 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
+    <div className={`relative h-full ${className ?? ""}`}>
+      <div className="pointer-events-none absolute start-3 bottom-14 z-[1000] hidden rounded-md border border-border/70 bg-background/85 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur sm:block">
         {messages.map.map_hint}
       </div>
       {boundaryLoading ? (
-        <div className="pointer-events-none absolute start-3 top-11 z-[1000] rounded-md border border-border/70 bg-background/85 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
-          Loading boundaries...
+        <div className="pointer-events-none absolute start-3 bottom-3 z-[1000] rounded-md border border-border/70 bg-background/85 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
+          {messages.loading.map}
         </div>
       ) : null}
       {boundaryError ? (
-        <div className="pointer-events-none absolute start-3 top-11 z-[1000] rounded-md border border-destructive/60 bg-background/85 px-2 py-1 text-[11px] text-destructive backdrop-blur">
+        <div className="pointer-events-none absolute end-3 bottom-3 z-[1000] rounded-md border border-destructive/60 bg-background/85 px-2 py-1 text-[11px] text-destructive backdrop-blur">
           {boundaryError}
         </div>
       ) : null}
 
       {selectionPath.cityCode || selectionPath.districtCode ? (
-        <div className="absolute bottom-3 start-3 z-[1000] flex flex-col gap-2">
+        <div className="absolute end-3 top-16 z-[1000] flex flex-col gap-2">
           {selectionPath.cityCode ? (
             <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background/90 px-2 py-1 text-xs backdrop-blur">
               <span className="text-muted-foreground">{messages.filters.city}:</span>
@@ -1478,7 +1478,7 @@ export function ListingsMap({
         zoomDelta={1}
         wheelPxPerZoomLevel={30}
         wheelDebounceTime={20}
-        className="h-[58vh] min-h-[420px] w-full rounded-xl border border-border/70 bg-slate-950"
+        className="h-full min-h-[420px] w-full bg-slate-950"
       >
         <Pane name="boundary-pane" style={{ zIndex: 320 }} />
         <Pane name="cluster-pane" style={{ zIndex: 520 }} />

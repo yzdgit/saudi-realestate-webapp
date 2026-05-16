@@ -51,7 +51,12 @@
     "bedrooms_min": "أدنى غرف نوم",
     "bathrooms_min": "أدنى حمامات",
     "rooms_min": "أدنى غرف",
-    "in_view": "المعروض داخل نطاق الخريطة فقط"
+    "in_view": "المعروض داخل نطاق الخريطة فقط",
+    "search_placeholder": "ابحث…",
+    "no_matches": "لا توجد نتائج",
+    "region_placeholder": "كل المناطق",
+    "city_placeholder": "كل المدن",
+    "district_placeholder": "كل الأحياء"
   },
   "goal": {
     "sale": "بيع",
@@ -135,8 +140,11 @@
     "open_source": "فتح الإعلان الأصلي",
     "details_title": "تفاصيل العرض",
     "no_selection": "اختر أي عرض من الجدول أو البطاقات أو الخريطة لعرض التفاصيل.",
-    "compare": "مقارنة",
+    "compare": "أضف إلى المقارنة",
+    "in_compare": "في المقارنة",
     "compare_selected": "مقارنة العروض المحددة",
+    "compare_limit": "حتى 3 عروض",
+    "results_summary": "{showing} من {total}",
     "outlier": "قيمة شاذة",
     "page": "الصفحة",
     "no_results_title": "لا توجد نتائج",

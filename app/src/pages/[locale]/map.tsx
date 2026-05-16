@@ -139,59 +139,66 @@ export default function MapPage({ locale }: InferGetStaticPropsType<typeof getSt
         description={messages.errors.boundary_description}
         actionLabel={messages.errors.boundary_action}
       >
-      <ExplorerShell
-        locale={locale}
-        messages={messages}
-        activePage="map"
-        title={messages.map.title}
-        description={messages.map.description}
-        filterPanelDesktop={
-          <FilterPanelDesktop
-            locale={locale}
-            messages={messages}
-            filters={filters}
-            options={HARDCODED_FILTER_OPTIONS}
-            onPatch={setFilters}
-            onReset={resetFilters}
-            disableNumericFilters
-          />
-        }
-        filterPanelMobile={
-          <FilterPanelMobile
-            locale={locale}
-            messages={messages}
-            filters={filters}
-            options={HARDCODED_FILTER_OPTIONS}
-            onPatch={setFilters}
-            onReset={resetFilters}
-            disableNumericFilters
-          />
-        }
-        statsRow={<StatsRow locale={locale} messages={messages} snapshot={stats} />}
-        hrefQuery={hrefQuery}
-      >
-        <div className="relative">
-          <ListingsMap
-            locale={locale}
-            messages={messages}
-            filters={filters}
-            listings={mapListings}
-            overlayMode={effectiveOverlayMode}
-            areaStatsByLevel={areaStatsByLevel}
-            onPatchFilters={setFilters}
-            onSelectListing={() => undefined}
-          />
-          {error ? (
-            <div className="pointer-events-none absolute end-3 top-3 z-[1002] rounded-md border border-destructive/60 bg-background/90 px-2 py-1 text-[11px] text-destructive backdrop-blur">
-              {error}
+        <ExplorerShell
+          locale={locale}
+          messages={messages}
+          activePage="map"
+          layout="wide"
+          filterPanelDesktop={
+            <FilterPanelDesktop
+              locale={locale}
+              messages={messages}
+              filters={filters}
+              options={HARDCODED_FILTER_OPTIONS}
+              onPatch={setFilters}
+              onReset={resetFilters}
+              disableNumericFilters
+            />
+          }
+          filterPanelMobile={
+            <FilterPanelMobile
+              locale={locale}
+              messages={messages}
+              filters={filters}
+              options={HARDCODED_FILTER_OPTIONS}
+              onPatch={setFilters}
+              onReset={resetFilters}
+              disableNumericFilters
+            />
+          }
+          hrefQuery={hrefQuery}
+        >
+          <div className="relative h-[calc(100vh-92px)] min-h-[540px] overflow-hidden rounded-xl border border-border/70 bg-surface-2">
+            <ListingsMap
+              locale={locale}
+              messages={messages}
+              filters={filters}
+              listings={mapListings}
+              overlayMode={effectiveOverlayMode}
+              areaStatsByLevel={areaStatsByLevel}
+              onPatchFilters={setFilters}
+              onSelectListing={() => undefined}
+            />
+
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-[1002] flex flex-wrap items-start justify-between gap-2">
+              <StatsRow
+                locale={locale}
+                messages={messages}
+                snapshot={stats}
+                variant="overlay"
+              />
+              {error ? (
+                <div className="pointer-events-auto rounded-md border border-destructive/60 bg-background/90 px-2 py-1 text-[11px] text-destructive shadow-md backdrop-blur">
+                  {error}
+                </div>
+              ) : isLoading ? (
+                <div className="pointer-events-auto rounded-md border border-border/70 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-md backdrop-blur">
+                  {messages.loading.map_updating}
+                </div>
+              ) : null}
             </div>
-          ) : isLoading ? (
-            <div className="pointer-events-none absolute end-3 top-3 z-[1002] rounded-md border border-border/70 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
-              {messages.loading.map_updating}
-            </div>
-          ) : null}
-        </div>
-      </ExplorerShell>
+          </div>
+        </ExplorerShell>
       </ErrorBoundary>
     </>
   );

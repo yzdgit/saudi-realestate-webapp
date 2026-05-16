@@ -147,8 +147,6 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
           locale={locale}
           messages={messages}
           activePage="listings"
-          title={messages.listings.title}
-          description={messages.listings.description}
           filterPanelDesktop={
             <FilterPanelDesktop
               locale={locale}
@@ -214,15 +212,20 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
               messages={messages}
               listings={browseResult.rows}
               compareIds={compareIds}
+              sort={filters.sort}
               onSelect={openListingDetails}
               onToggleCompare={toggleCompare}
+              onSortChange={(sort) => setFilters({ sort })}
             />
           )}
 
           <PaginationControls
+            locale={locale}
             messages={messages}
             page={browseResult.page}
             totalPages={browseResult.totalPages}
+            totalItems={browseResult.totalItems}
+            pageSize={browseResult.pageSize}
             onPageChange={(page) => setFilters({ page }, { resetPage: false })}
           />
         </ExplorerShell>
@@ -234,6 +237,9 @@ export default function ListingsPage({ locale }: InferGetStaticPropsType<typeof 
         listing={selectedListing}
         open={isDetailsOpen}
         onOpenChange={setIsDetailsOpen}
+        isInCompare={selectedListing ? Boolean(compareById[selectedListing.id]) : false}
+        canAddToCompare={compareIds.length < 3}
+        onToggleCompare={toggleCompare}
       />
     </>
   );

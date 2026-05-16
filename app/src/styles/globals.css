@@ -24,6 +24,13 @@
     --input: 217 19% 23%;
     --ring: 191 96% 42%;
     --radius: 0.75rem;
+    /* Three-tier surface hierarchy. */
+    --surface-1: 220 29% 8%;   /* page background */
+    --surface-2: 221 24% 11%;  /* default card */
+    --surface-3: 220 22% 14%;  /* elevated / interactive */
+    /* Header geometry — used for scroll-margin offsets. */
+    --header-h: 56px;
+    /* Chart palette — one accent + one supporting hue + neutrals. */
     --chart-1: 191 96% 42%;
     --chart-2: 197 88% 55%;
     --chart-3: 84 81% 44%;
@@ -55,6 +62,19 @@
 
   [dir="rtl"] {
     font-family: "IBM Plex Sans Arabic", "Sora", "Noto Sans Arabic", sans-serif;
+  }
+
+  /* Numbers and money should always be tabular-aligned. */
+  .num,
+  [data-tabular],
+  .recharts-cartesian-axis-tick-value {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* Section headings get clear separation from the fixed header. */
+  [data-section] {
+    scroll-margin-top: calc(var(--header-h) + 24px);
   }
 
   .leaflet-container {
@@ -104,3 +124,4 @@
                 0 2px 4px rgba(0, 0, 0, 0.4);
   }
 }
+

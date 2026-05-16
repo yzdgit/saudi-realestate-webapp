@@ -14,10 +14,9 @@ import {
 } from "@/lib/location-codes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MultiCombobox, type MultiComboboxOption } from "@/components/ui/multi-combobox";
 import {
   Select,
   SelectContent,
@@ -159,7 +158,7 @@ function IconRadioToggle<T extends string>({ value, options, onChange }: IconRad
   return (
     <div
       role="radiogroup"
-      className="grid gap-2"
+      className="grid gap-1.5"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => {
@@ -173,15 +172,16 @@ function IconRadioToggle<T extends string>({ value, options, onChange }: IconRad
             role="radio"
             aria-checked={isActive}
             className={cn(
-              "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors",
+              "group flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
                 ? "border-primary bg-primary/15 text-foreground"
-                : "border-border/70 bg-background/50 text-muted-foreground hover:bg-secondary/60"
+                : "border-border/70 bg-surface-3/40 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
             )}
             onClick={() => onChange(option.value)}
           >
-            <Icon className="h-4 w-4" />
-            <span className="text-center leading-tight">{option.label}</span>
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+            <span>{option.label}</span>
           </button>
         );
       })}
@@ -214,6 +214,35 @@ function FilterPanelBody({
     [draftFilters, normalizedFilters]
   );
 
+  const regionOptions: MultiComboboxOption[] = useMemo(
+    () =>
+      options.region.map((code) => ({
+        value: code,
+        label: getRegionLabel(code, locale)
+      })),
+    [options.region, locale]
+  );
+
+  const cityOptions: MultiComboboxOption[] = useMemo(
+    () =>
+      visibleCities.map((code) => ({
+        value: code,
+        label: getCityLabel(code, locale)
+      })),
+    [visibleCities, locale]
+  );
+
+  const districtOptions: MultiComboboxOption[] = useMemo(
+    () =>
+      visibleDistricts.map((code) => ({
+        value: code,
+        label: getDistrictLabel(code, locale)
+      })),
+    [visibleDistricts, locale]
+  );
+
+  const propertyTypeChips = options.property_type;
+
   const patchDraft = (
     patch: Partial<ListingFilters>,
     patchOptions: PatchOptions = { resetPage: true }
@@ -228,8 +257,7 @@ function FilterPanelBody({
     });
   };
 
-  const onRegionToggle = (regionCode: string) => {
-    const nextRegion = toggleString(draftFilters.region, regionCode);
+  const onRegionChange = (nextRegion: string[]) => {
     const nextVisibleCitySet = new Set(getVisibleCityOptions(options, nextRegion));
     const nextCity = draftFilters.city.filter((cityCode) => nextVisibleCitySet.has(cityCode));
     const nextVisibleDistrictSet = new Set(getVisibleDistrictOptions(options, nextRegion, nextCity));
@@ -244,8 +272,7 @@ function FilterPanelBody({
     });
   };
 
-  const onCityToggle = (cityCode: string) => {
-    const nextCity = toggleString(draftFilters.city, cityCode);
+  const onCityChange = (nextCity: string[]) => {
     const nextVisibleDistrictSet = new Set(
       getVisibleDistrictOptions(options, draftFilters.region, nextCity)
     );
@@ -259,6 +286,10 @@ function FilterPanelBody({
     });
   };
 
+  const onDistrictChange = (nextDistrict: string[]) => {
+    patchDraft({ district: nextDistrict as ListingFilters["district"] });
+  };
+
   const onApply = () => {
     onPatch(draftFilters, { resetPage: false });
   };
@@ -268,19 +299,23 @@ function FilterPanelBody({
     onReset();
   };
 
+  const pad = compact ? "p-4" : "p-4 lg:p-5";
+
   return (
-    <Card className="h-fit border-border/70 bg-card/90">
-      <CardHeader className={compact ? "p-4" : "p-5"}>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">{messages.filters.title}</CardTitle>
-          <Button variant="ghost" size="sm" onClick={onClearAll}>
-            {messages.filters.clear_all}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className={compact ? "space-y-4 p-4 pt-0" : "space-y-5 p-5 pt-0"}>
-        <div className="space-y-2">
-          <Label>{messages.filters.goal}</Label>
+    <div className="overflow-hidden rounded-xl border border-border/70 bg-surface-2">
+      <div className={cn("flex items-center justify-between border-b border-border/60", pad)}>
+        <p className="text-sm font-semibold tracking-tight text-foreground">
+          {messages.filters.title}
+        </p>
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onClearAll}>
+          {messages.filters.clear_all}
+        </Button>
+      </div>
+      <div className={cn("space-y-4", pad)}>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {messages.filters.goal}
+          </Label>
           <IconRadioToggle
             value={draftFilters.goal}
             onChange={(value) => patchDraft({ goal: value, rent_frequency: [] })}
@@ -291,8 +326,10 @@ function FilterPanelBody({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>{messages.filters.listing_type}</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {messages.filters.listing_type}
+          </Label>
           <IconRadioToggle
             value={draftFilters.listing_type}
             onChange={(value) => patchDraft({ listing_type: value })}
@@ -303,65 +340,65 @@ function FilterPanelBody({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>{messages.filters.region}</Label>
-          <div className="grid max-h-32 gap-2 overflow-y-auto pr-1">
-            {options.region.map((region) => (
-              <label key={region} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={draftFilters.region.includes(region)}
-                  onCheckedChange={() => onRegionToggle(region)}
-                />
-                <span>{getRegionLabel(region, locale)}</span>
-              </label>
-            ))}
-          </div>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {messages.filters.region}
+          </Label>
+          <MultiCombobox
+            options={regionOptions}
+            values={draftFilters.region}
+            onChange={onRegionChange}
+            placeholder={messages.filters.region_placeholder}
+            searchPlaceholder={messages.filters.search_placeholder}
+            emptyText={messages.filters.no_matches}
+            clearLabel={messages.filters.clear_all}
+          />
         </div>
 
-        <div className="space-y-2">
-          <Label>{messages.filters.city}</Label>
-          <div className="grid max-h-32 gap-2 overflow-y-auto pr-1">
-            {visibleCities.map((city) => (
-              <label key={city} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={draftFilters.city.includes(city)}
-                  onCheckedChange={() => onCityToggle(city)}
-                />
-                <span>{getCityLabel(city, locale)}</span>
-              </label>
-            ))}
-          </div>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {messages.filters.city}
+          </Label>
+          <MultiCombobox
+            options={cityOptions}
+            values={draftFilters.city}
+            onChange={onCityChange}
+            placeholder={messages.filters.city_placeholder}
+            searchPlaceholder={messages.filters.search_placeholder}
+            emptyText={messages.filters.no_matches}
+            clearLabel={messages.filters.clear_all}
+          />
         </div>
 
         {draftFilters.city.length > 0 ? (
-          <div className="space-y-2">
-            <Label>{messages.filters.district}</Label>
-            <div className="grid max-h-32 gap-2 overflow-y-auto pr-1">
-              {visibleDistricts.map((district) => (
-                <label key={district} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Checkbox
-                    checked={draftFilters.district.includes(district)}
-                    onCheckedChange={() =>
-                      patchDraft({
-                        district: toggleString(draftFilters.district, district) as ListingFilters["district"]
-                      })
-                    }
-                  />
-                  <span>{getDistrictLabel(district, locale)}</span>
-                </label>
-              ))}
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.district}
+            </Label>
+            <MultiCombobox
+              options={districtOptions}
+              values={draftFilters.district}
+              onChange={onDistrictChange}
+              placeholder={messages.filters.district_placeholder}
+              searchPlaceholder={messages.filters.search_placeholder}
+              emptyText={messages.filters.no_matches}
+              clearLabel={messages.filters.clear_all}
+            />
           </div>
         ) : null}
 
-        <div className="space-y-2">
-          <Label>{messages.filters.property_type}</Label>
-          <div className="grid max-h-40 gap-2 overflow-y-auto pr-1">
-            {options.property_type.map((type) => (
-              <label key={type} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={draftFilters.property_type.includes(type)}
-                  onCheckedChange={() =>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {messages.filters.property_type}
+          </Label>
+          <div className="flex flex-wrap gap-1.5">
+            {propertyTypeChips.map((type) => {
+              const isActive = draftFilters.property_type.includes(type);
+              return (
+                <button
+                  type="button"
+                  key={type}
+                  onClick={() =>
                     patchDraft({
                       property_type: toggleString(
                         draftFilters.property_type,
@@ -369,29 +406,44 @@ function FilterPanelBody({
                       ) as ListingFilters["property_type"]
                     })
                   }
-                />
-                <span>{messages.property_type[type]}</span>
-              </label>
-            ))}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isActive
+                      ? "border-primary/60 bg-primary/15 text-foreground"
+                      : "border-border/70 bg-surface-3/40 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  )}
+                  aria-pressed={isActive}
+                >
+                  {messages.property_type[type]}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="price_min">{messages.filters.price_min}</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="price_min" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.price_min}
+            </Label>
             <Input
               id="price_min"
               inputMode="numeric"
+              className="num"
               value={draftFilters.price_min ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ price_min: parseNumber(event.target.value) })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="price_max">{messages.filters.price_max}</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="price_max" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.price_max}
+            </Label>
             <Input
               id="price_max"
               inputMode="numeric"
+              className="num"
               value={draftFilters.price_max ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ price_max: parseNumber(event.target.value) })}
@@ -399,22 +451,28 @@ function FilterPanelBody({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="area_min">{messages.filters.area_min}</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="area_min" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.area_min}
+            </Label>
             <Input
               id="area_min"
               inputMode="numeric"
+              className="num"
               value={draftFilters.area_min ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ area_min: parseNumber(event.target.value) })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="area_max">{messages.filters.area_max}</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="area_max" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.area_max}
+            </Label>
             <Input
               id="area_max"
               inputMode="numeric"
+              className="num"
               value={draftFilters.area_max ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ area_max: parseNumber(event.target.value) })}
@@ -422,32 +480,41 @@ function FilterPanelBody({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="bedrooms_min">{messages.filters.bedrooms_min}</Label>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="bedrooms_min" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.bedrooms_min}
+            </Label>
             <Input
               id="bedrooms_min"
               inputMode="numeric"
+              className="num"
               value={draftFilters.bedrooms_min ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ bedrooms_min: parseNumber(event.target.value) })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="bathrooms_min">{messages.filters.bathrooms_min}</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="bathrooms_min" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.bathrooms_min}
+            </Label>
             <Input
               id="bathrooms_min"
               inputMode="numeric"
+              className="num"
               value={draftFilters.bathrooms_min ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ bathrooms_min: parseNumber(event.target.value) })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="rooms_min">{messages.filters.rooms_min}</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="rooms_min" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {messages.filters.rooms_min}
+            </Label>
             <Input
               id="rooms_min"
               inputMode="numeric"
+              className="num"
               value={draftFilters.rooms_min ?? ""}
               disabled={disableNumericFilters}
               onChange={(event) => patchDraft({ rooms_min: parseNumber(event.target.value) })}
@@ -455,13 +522,15 @@ function FilterPanelBody({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>{messages.filters.sort}</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {messages.filters.sort}
+          </Label>
           <Select
             value={draftFilters.sort}
             onValueChange={(value) => patchDraft({ sort: value as ListingSort })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="bg-surface-3/40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -475,8 +544,8 @@ function FilterPanelBody({
         </div>
 
         {showInViewToggle ? (
-          <div className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2">
-            <Label htmlFor="in-view" className="text-sm text-muted-foreground">
+          <div className="flex items-center justify-between rounded-md border border-border/70 bg-surface-3/40 px-3 py-2">
+            <Label htmlFor="in-view" className="text-xs text-muted-foreground">
               {messages.filters.in_view}
             </Label>
             <Switch
@@ -486,12 +555,18 @@ function FilterPanelBody({
             />
           </div>
         ) : null}
+      </div>
 
-        <Button className="w-full" onClick={onApply} disabled={!hasPendingChanges}>
+      <div className={cn("sticky bottom-0 border-t border-border/60 bg-surface-2/95 backdrop-blur", pad)}>
+        <Button
+          className="w-full"
+          onClick={onApply}
+          disabled={!hasPendingChanges}
+        >
           {messages.filters.apply}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -518,7 +593,7 @@ export function FilterPanelMobile(props: FilterPanelProps) {
         <SheetHeader className="border-b border-border/70 p-4">
           <SheetTitle>{props.messages.filters.title}</SheetTitle>
         </SheetHeader>
-        <div className="p-4">
+        <div className="p-3">
           <FilterPanelBody {...props} compact />
         </div>
       </SheetContent>
